@@ -25,6 +25,8 @@
     "db:status:test": "dotenv -e .env.test -e .env.local -- prisma migrate status",
     "seed:demo": "dotenv -e .env.local -- tsx scripts/seed-demo.ts",
     "seed:demo:test": "dotenv -e .env.test -e .env.local -- tsx scripts/seed-demo.ts",
+    "seed:callboard": "dotenv -e .env.local -- tsx scripts/seed-callboard.ts",
+    "seed:callboard:test": "dotenv -e .env.test -e .env.local -- tsx scripts/seed-callboard.ts",
     "db:setup": "tsx scripts/db-setup.ts",
     "new-project": "tsx scripts/new-project.ts",
     "foundation:drift": "tsx scripts/foundation-drift.ts",

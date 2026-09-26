@@ -6,6 +6,7 @@ const PORT = Number(process.env.PORT ?? 4600);
 export default defineConfig({
   testDir: 'e2e',
   fullyParallel: false,
+  workers: 1, // specs share one database and two of them seed the demo org; parallel files raced on Org.slug
   reporter: 'list',
   use: { baseURL: `http://localhost:${PORT}` },
   webServer: {

@@ -1,0 +1,211 @@
+// Callboard's own tables (clone-owned). The object model is in the PRD doc (NEXT.md links it).
+// Every row carries orgId (spec §6) and every query spreads inOrg(ctx) (spec §7b rule 2), including
+// children whose parent already scopes them: one rule, no exceptions to remember.
+
+enum PersonKind {
+  employee
+  volunteer
+}
+
+enum EventStatus {
+  draft
+  staffing
+  confirmed
+  live
+  closed
+}
+
+enum AssignmentStatus {
+  invited
+  confirmed
+  declined
+  released
+}
+
+/// Anyone who can be staffed: an employee from any department or a volunteer. Never needs a User.
+model Person {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @db.Uuid
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name        String
+  mobile      String // E.164; the SMS thread and the magic link are tied to it
+  email       String?
+  kind        PersonKind
+  department  String       @default("")
+  notes       String       @default("") // internal: never rendered on the person's own page
+  smsOptOut   Boolean      @default(false)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(6)
+  assignments Assignment[]
+  links       PersonLink[]
+  leadOf      Aor[]        @relation("AorLead")
+  deputyOf    Aor[]        @relation("AorDeputy")
+
+  @@unique([orgId, mobile])
+  @@index([orgId, name])
+}
+
+model Event {
+  id            String         @id @default(uuid()) @db.Uuid
+  orgId         String         @db.Uuid
+  org           Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name          String
+  venue         String         @default("")
+  timezone      String         @default("America/Chicago") // IANA; shift times are entered and shown in it
+  status        EventStatus    @default(draft)
+  callOffsetMin Int            @default(45) // call time before shift start, the default for new shifts
+  graceMin      Int            @default(15) // no-show grace after call time (used from phase 2)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
+  days          EventDay[]
+  aors          Aor[]
+  areas         Area[]
+  positions     Position[]
+  shifts        Shift[]
+  assignments   Assignment[]
+  links         PersonLink[]
+  runOfShow     RunOfShowRow[]
+
+  @@index([orgId, createdAt])
+}
+
+model EventDay {
+  id      String   @id @default(uuid()) @db.Uuid
+  orgId   String   @db.Uuid
+  org     Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId String   @db.Uuid
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  date    DateTime @db.Date
+  shifts  Shift[]
+
+  @@unique([eventId, date])
+}
+
+/// Area of responsibility: the cluster of areas one lead owns (PRD 2).
+model Aor {
+  id           String  @id @default(uuid()) @db.Uuid
+  orgId        String  @db.Uuid
+  org          Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId      String  @db.Uuid
+  event        Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name         String
+  color        String  @default("#4f46e5")
+  radioChannel String  @default("")
+  leadId       String? @db.Uuid
+  lead         Person? @relation("AorLead", fields: [leadId], references: [id], onDelete: SetNull)
+  deputyId     String? @db.Uuid
+  deputy       Person? @relation("AorDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
+  areas        Area[]
+
+  @@index([eventId])
+}
+
+model Area {
+  id        String     @id @default(uuid()) @db.Uuid
+  orgId     String     @db.Uuid
+  org       Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId   String     @db.Uuid
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  aorId     String?    @db.Uuid // null = ungrouped, rolls up to the planner
+  aor       Aor?       @relation(fields: [aorId], references: [id], onDelete: SetNull)
+  name      String
+  location  String     @default("")
+  positions Position[]
+
+  @@index([eventId])
+}
+
+model Position {
+  id              String  @id @default(uuid()) @db.Uuid
+  orgId           String  @db.Uuid
+  org             Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId         String  @db.Uuid
+  event           Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  areaId          String  @db.Uuid
+  area            Area    @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  name            String
+  minHeadcount    Int     @default(1) // the number that breaks the event
+  targetHeadcount Int     @default(1)
+  uniform         String  @default("")
+  brief           String  @default("") // the position card, inline until the library lands (phase 3)
+  shifts          Shift[]
+
+  @@index([areaId])
+}
+
+model Shift {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @db.Uuid
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId     String       @db.Uuid
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  positionId  String       @db.Uuid
+  position    Position     @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  dayId       String       @db.Uuid
+  day         EventDay     @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  callAt      DateTime     @db.Timestamptz(6) // all no-show logic keys off this, never startAt
+  startAt     DateTime     @db.Timestamptz(6)
+  endAt       DateTime     @db.Timestamptz(6)
+  needed      Int
+  overbookPct Int          @default(20)
+  assignments Assignment[]
+
+  @@index([eventId, dayId])
+  @@index([positionId])
+}
+
+model Assignment {
+  id            String           @id @default(uuid()) @db.Uuid
+  orgId         String           @db.Uuid
+  org           Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId       String           @db.Uuid
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  shiftId       String           @db.Uuid
+  shift         Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  personId      String           @db.Uuid
+  person        Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  status        AssignmentStatus @default(invited)
+  respondedAt   DateTime?        @db.Timestamptz(6)
+  declineReason String           @default("")
+  t7SentAt      DateTime?        @db.Timestamptz(6) // reminder bookkeeping (cron-jobs.ts)
+  t1SentAt      DateTime?        @db.Timestamptz(6)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@unique([shiftId, personId])
+  @@index([personId])
+  @@index([eventId, status])
+}
+
+/// One magic link per person per event (PRD 3). Only the sha256 is stored (INV-07).
+model PersonLink {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @db.Uuid
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId   String   @db.Uuid
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId  String   @db.Uuid
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime @db.Timestamptz(6) // event end + 7 days; no immortal links
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([eventId, personId])
+}
+
+/// Mirror of the run of show kept in Excel or Smartsheet (PRD 1). Never edited here.
+model RunOfShowRow {
+  id        String @id @default(uuid()) @db.Uuid
+  orgId     String @db.Uuid
+  org       Org    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId   String @db.Uuid
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sourceKey String // "time|cue" from the sheet, or "manual:<uuid>" for a hand-added line
+  manual    Boolean @default(false) // hand-added here; a re-import never replaces these
+  at        String // "09:30" as written in the sheet; a timeline, not a timestamp
+  cue       String
+  area      String @default("")
+  owner     String @default("")
+  sortOrder Int
+
+  @@unique([eventId, sourceKey])
+}

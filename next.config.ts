@@ -24,6 +24,16 @@ const config: NextConfig = {
         { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
       ],
     },
+    // Callboard's person pages (/p/[token]) post a form back to their own origin, and `no-referrer`
+    // makes browsers send `Origin: null` on that POST, which the same-origin guard refuses. The global
+    // strict-origin-when-cross-origin already strips the token from any cross-origin Referer.
+    {
+      source: '/p/:path*',
+      headers: [
+        { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+      ],
+    },
   ],
 };
 

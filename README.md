@@ -31,6 +31,21 @@ Working on the template itself: `npm run dev:template` serves on :4100.
 set `PGUSER`/`PGPASSWORD` or `LOCAL_PG_URL_BASE` for a different Postgres. Real keys (Resend, Stripe, Twilio) are optional
 and go in `.env.local`; without them email is captured in the database, billing uses a mock, and SMS is off.
 
+## Callboard
+
+Onsite staffing for live events: plan the crew, group areas under leads, invite employees and volunteers by SMS with one-tap confirm, and mirror the run of show from Excel or Smartsheet. The PRDs are the spec: see `NEXT.md` for the link.
+
+| Command | What it does |
+|---|---|
+| `npm run seed:demo && npm run seed:callboard` | demo accounts plus the Spring Expo for the Acme org (12 people, 2 AoRs, 16 shifts, a half-staffed plan) |
+| `npm run dev` | http://localhost:4600/demo, sign in as owner@acme.demo.test (DEMO_MODE=1) |
+| `npm test` | unit, integration and invariants; Callboard's are `tests/unit/callboard-lib.test.ts` and `tests/integration/callboard-reminders.test.ts` |
+| `npm run test:e2e -- e2e/callboard.spec.ts` | invite → SMS link → confirm without a login; .xlsx run-of-show import |
+
+Where things live: `prisma/schema/callboard.prisma` (tables), `src/lib/` (phone, CSV, xlsx reader, timezone, magic links, message templates, reminders), `src/app/o/[org]/{people,events}` (planner pages), `src/app/p/[token]` (the person's page, no login), `src/app/cron-jobs.ts` (T-7 and T-1 reminders, then the outbox drain).
+
+Messages: without Twilio keys every SMS and email is captured in `CapturedMessage` (read it with `psql`). Invites, nudges and releases drain the outbox immediately; the hourly cron sends the rest and the reminders.
+
 ## Commands
 
 | Command | What it does |
