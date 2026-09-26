@@ -4,11 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 S=${VERCEL_SCOPE:-shanelabountyai-8212s-projects}
-get() { grep -E "^$1=" .env.production.local | head -1 | cut -d= -f2- | tr -d '\r\n'; }
+get() { grep -E "^$1=" .env.production.local | head -1 | cut -d= -f2- | tr -d '\r\n' | sed -E 's/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/'; } # quotes, if pasted, are not part of the value
 SID=$(get TWILIO_ACCOUNT_SID); TOKEN=$(get TWILIO_AUTH_TOKEN); FROM=$(get TWILIO_FROM)
 [ -n "$SID" ] && [ -n "$TOKEN" ] && [ -n "$FROM" ] || { echo "Fill TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM (E.164, e.g. +15551234567) in .env.production.local first."; exit 1; }
-APP_URL=$(vercel env pull --environment production --scope "$S" /dev/stdout 2>/dev/null | grep -E '^APP_URL=' | cut -d= -f2- | tr -d '"\r\n')
-[ -n "$APP_URL" ] || { echo "APP_URL is not set on Vercel production."; exit 1; }
+APP_URL=${APP_URL:-https://callboard-ten.vercel.app} # the production alias (NEXT.md); override with APP_URL=... if it moves
 
 for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM; do
   vercel env rm "$k" production --yes --scope "$S" >/dev/null 2>&1 || true
@@ -20,4 +19,5 @@ PN=$(curl -sS -u "$SID:$TOKEN" "https://api.twilio.com/2010-04-01/Accounts/$SID/
 [ -n "$PN" ] || { echo "Twilio has no number $FROM on this account."; exit 1; }
 curl -sS -o /dev/null -w "twilio: webhook set (%{http_code})\n" -u "$SID:$TOKEN" -X POST "https://api.twilio.com/2010-04-01/Accounts/$SID/IncomingPhoneNumbers/$PN.json" \
   --data-urlencode "SmsUrl=$APP_URL/api/sms/inbound" --data-urlencode "SmsMethod=POST"
-echo "Redeploy to pick up the env: push a commit, or run: vercel redeploy \$(vercel ls callboard --prod --scope $S 2>/dev/null | awk 'NR==3{print \$1}') --scope $S"
+echo "Done. The env reaches production on the next code push (an env-only redeploy is skipped by the ignoreCommand)."
+
