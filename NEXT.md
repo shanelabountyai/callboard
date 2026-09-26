@@ -20,7 +20,15 @@ Skipped from PRD 5 P0 (add when a real event asks): readiness flags (credentiale
 QR-poster self check-in, lead override of the 3-hour early rule, per-person message thread and lead inbox
 (unrecognised replies are forwarded to the lead by SMS instead), change-notice drafting on shift edits.
 
-## Next item: deploy phase 1+2, then phase 3 (PRD 6: position card library, reliability record, review)
+## Backlog (in order)
+1. Deploy phase 1+2 (below). Vercel project `callboard` created 2026-09-26 (team shanelabountyai-8212s-projects).
+2. **Apply the design.** Run the design brief through Claude Design, then bring the result into the app: CSS custom
+   properties for the tokens (light + dark), the component set from the brief's Components table, and the screens in
+   the brief's order (person page first, lead roster, board, messages, plan, roster print). Replace the inline styles;
+   keep the ActionForm contract. Brief: https://claude.ai/code/artifact/7213f59c-5108-4cad-957d-d3615818380d
+3. Phase 3 (PRD 6: position card library, reliability record, review).
+
+## Deploy phase 1+2
 Deploy (needs Shane for two things):
 - Neon project → DATABASE_URL (pooled) + DIRECT_URL (unpooled) in Vercel. Not creatable from here.
 - Vercel project, Root Directory ".", env: AUTH_SECRET, APP_URL, CRON_SECRET, DEMO_MODE=1 (demo only),

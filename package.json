@@ -23,6 +23,8 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:test": "dotenv -e .env.test -e .env.local -- prisma migrate deploy",
     "db:status:test": "dotenv -e .env.test -e .env.local -- prisma migrate status",
+    "db:migrate:prod": "ALLOW_CLOUD_DB=1 dotenv -e .env.production.local -- prisma migrate deploy",
+    "db:status:prod": "ALLOW_CLOUD_DB=1 dotenv -e .env.production.local -- prisma migrate status",
     "seed:demo": "dotenv -e .env.local -- tsx scripts/seed-demo.ts",
     "seed:demo:test": "dotenv -e .env.test -e .env.local -- tsx scripts/seed-demo.ts",
     "seed:callboard": "dotenv -e .env.local -- tsx scripts/seed-callboard.ts",
