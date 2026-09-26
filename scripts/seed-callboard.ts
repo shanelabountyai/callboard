@@ -41,7 +41,7 @@ export async function seedCallboard(slug = 'acme') {
   start.setUTCHours(0, 0, 0, 0);
   const dates = [start, new Date(start.getTime() + 86_400_000)];
   const event = await db.event.create({
-    data: { orgId, name: 'Spring Expo', venue: 'Lakeside Convention Center', timezone: TZ, status: 'staffing', days: { create: dates.map((date) => ({ orgId, date })) } },
+    data: { orgId, name: 'Spring Expo', venue: 'Lakeside Convention Center', timezone: TZ, status: 'staffing', emergencyContact: 'Venue security 555-0100, radio 1', days: { create: dates.map((date) => ({ orgId, date })) } },
     include: { days: true },
   });
   const foh = await db.aor.create({ data: { orgId, eventId: event.id, name: 'Front of house', color: '#2563eb', radioChannel: '2', leadId: people.get('Marcus Bell'), deputyId: people.get('Priya Nair') } });
@@ -52,13 +52,16 @@ export async function seedCallboard(slug = 'acme') {
       { name: 'Badge printer', min: 1, target: 2, uniform: 'Black polo', brief: 'Print and hand over badges. Printer 2 jams above 40 an hour: slow the line rather than force it.' },
     ] },
     { area: 'Info Desk', location: 'Hall B entrance', aor: foh.id, positions: [{ name: 'Info', min: 1, target: 2, uniform: 'Black polo', brief: 'Answer where-is questions. Lost child or medical: call venue security on 555-0100, then radio 2.' }] },
-    { area: 'Exhibit Hall', location: 'Hall A', aor: floor.id, positions: [{ name: 'Floor runner', min: 2, target: 3, uniform: 'Green vest over your own clothes', brief: 'Walk the aisles, help exhibitors with power and supplies, report anything blocking an aisle.' }] },
+    { area: 'Exhibit Hall', location: 'Hall A', aor: floor.id, positions: [
+      { name: 'Floor runner', min: 2, target: 3, uniform: 'Green vest over your own clothes', brief: 'Walk the aisles, help exhibitors with power and supplies, report anything blocking an aisle.' },
+      { name: 'Floater', min: 0, target: 2, uniform: 'Green vest', brief: 'Wait at the ops desk; the planner will send you where a position is short.', isFloat: true, grace: 20 },
+    ] },
   ];
   const shiftIds: string[] = [];
   for (const a of plan) {
     const area = await db.area.create({ data: { orgId, eventId: event.id, name: a.area, location: a.location, aorId: a.aor } });
     for (const p of a.positions) {
-      const pos = await db.position.create({ data: { orgId, eventId: event.id, areaId: area.id, name: p.name, minHeadcount: p.min, targetHeadcount: p.target, uniform: p.uniform, brief: p.brief } });
+      const pos = await db.position.create({ data: { orgId, eventId: event.id, areaId: area.id, name: p.name, minHeadcount: p.min, targetHeadcount: p.target, uniform: p.uniform, brief: p.brief, isFloat: 'isFloat' in p && p.isFloat, graceMin: 'grace' in p ? p.grace : null } });
       for (const day of event.days) {
         for (const [s, e] of [['07:30', '12:00'], ['12:00', '17:00']] as const) {
           const ymd = day.date.toISOString().slice(0, 10);

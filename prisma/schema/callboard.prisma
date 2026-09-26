@@ -40,6 +40,8 @@ model Person {
   links       PersonLink[]
   leadOf      Aor[]        @relation("AorLead")
   deputyOf    Aor[]        @relation("AorDeputy")
+  alerts      Alert[]
+  broadcasts  BroadcastRecipient[]
 
   @@unique([orgId, mobile])
   @@index([orgId, name])
@@ -54,7 +56,8 @@ model Event {
   timezone      String         @default("America/Chicago") // IANA; shift times are entered and shown in it
   status        EventStatus    @default(draft)
   callOffsetMin Int            @default(45) // call time before shift start, the default for new shifts
-  graceMin      Int            @default(15) // no-show grace after call time (used from phase 2)
+  graceMin      Int            @default(15) // no-show grace after call time; a position can override (PRD 5)
+  emergencyContact String      @default("") // venue security / medical; shown first on a medical or security help request
   createdAt     DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
   days          EventDay[]
@@ -65,6 +68,8 @@ model Event {
   assignments   Assignment[]
   links         PersonLink[]
   runOfShow     RunOfShowRow[]
+  alerts        Alert[]
+  broadcasts    Broadcast[]
 
   @@index([orgId, createdAt])
 }
@@ -96,6 +101,7 @@ model Aor {
   deputyId     String? @db.Uuid
   deputy       Person? @relation("AorDeputy", fields: [deputyId], references: [id], onDelete: SetNull)
   areas        Area[]
+  alerts       Alert[]
 
   @@index([eventId])
 }
@@ -128,6 +134,8 @@ model Position {
   targetHeadcount Int     @default(1)
   uniform         String  @default("")
   brief           String  @default("") // the position card, inline until the library lands (phase 3)
+  graceMin        Int? // no-show grace in minutes; null = the event's default (PRD 5: doors 5, floaters 20)
+  isFloat         Boolean @default(false) // the float pool: people here can be deployed to a red cell on the day
   shifts          Shift[]
 
   @@index([areaId])
@@ -169,7 +177,14 @@ model Assignment {
   declineReason String           @default("")
   t7SentAt      DateTime?        @db.Timestamptz(6) // reminder bookkeeping (cron-jobs.ts)
   t1SentAt      DateTime?        @db.Timestamptz(6)
+  // Day of (PRD 5). checkedInAt is the device time of the tap; syncedAt is when the server heard of it.
+  checkedInAt   DateTime?        @db.Timestamptz(6)
+  checkInMethod String           @default("") // lead | self | sms | planner
+  checkInSyncedAt DateTime?      @db.Timestamptz(6)
+  checkedOutAt  DateTime?        @db.Timestamptz(6)
+  checkOutMethod String          @default("") // lead | self | sms | planner | auto (shift end + 60 min, flagged)
   createdAt     DateTime         @default(now()) @db.Timestamptz(6)
+  alerts        Alert[]
 
   @@unique([shiftId, personId])
   @@index([personId])
@@ -208,4 +223,68 @@ model RunOfShowRow {
   sortOrder Int
 
   @@unique([eventId, sourceKey])
+}
+
+enum AlertKind {
+  no_show
+  help
+}
+
+/// A day-of alert (PRD 5). Owned by the AoR's chain: step 0 = lead, 1 = deputy, 2 = planner.
+/// It escalates one step every 10 minutes (5 for help) until resolved; a planner sees step 2 on the board.
+model Alert {
+  id           String    @id @default(uuid()) @db.Uuid
+  orgId        String    @db.Uuid
+  org          Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId      String    @db.Uuid
+  event        Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind         AlertKind
+  severity     Int       @default(2) // 1 low, 2 medium, 3 high (medical or security)
+  personId     String    @db.Uuid
+  person       Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  assignmentId String?   @db.Uuid
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  aorId        String?   @db.Uuid // the chain; null = straight to the planner
+  aor          Aor?      @relation(fields: [aorId], references: [id], onDelete: SetNull)
+  step         Int       @default(0)
+  steppedAt    DateTime  @default(now()) @db.Timestamptz(6)
+  category     String    @default("") // help: supplies | vip | relief | medical | security | other
+  note         String    @default("")
+  openedAt     DateTime  @default(now()) @db.Timestamptz(6)
+  resolvedAt   DateTime? @db.Timestamptz(6)
+  resolution   String    @default("")
+
+  @@index([assignmentId, resolvedAt]) // the sweep checks for an open one before raising; a NULL-safe unique cannot
+  @@index([eventId, resolvedAt])
+}
+
+/// A targeted send (PRD 4): one message to an audience, with optional one-tap "Got it".
+model Broadcast {
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @db.Uuid
+  org         Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId     String   @db.Uuid
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  audience    String // human label of the picker choice, kept for the log
+  body        String
+  requiresAck Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  recipients  BroadcastRecipient[]
+
+  @@index([eventId, createdAt])
+}
+
+model BroadcastRecipient {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgId       String    @db.Uuid
+  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  broadcastId String    @db.Uuid
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  personId    String    @db.Uuid
+  person      Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  outboxId    String?   @db.Uuid // the SMS row, for delivered / failed per person (swept after a week)
+  ackedAt     DateTime? @db.Timestamptz(6)
+
+  @@unique([broadcastId, personId])
+  @@index([personId, ackedAt])
 }

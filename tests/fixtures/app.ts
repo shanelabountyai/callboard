@@ -9,7 +9,7 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
   const ID = (k: number) => `00000000-0000-4000-8000-${String(n + k).padStart(12, '0')}`;
   const orgId = org.orgId;
   const t = now();
-  const ids = { person: ID(1), event: ID(2), eventDay: ID(3), aor: ID(4), area: ID(5), position: ID(6), shift: ID(7), assignment: ID(8), runOfShowRow: ID(10) };
+  const ids = { person: ID(1), event: ID(2), eventDay: ID(3), aor: ID(4), area: ID(5), position: ID(6), shift: ID(7), assignment: ID(8), runOfShowRow: ID(10), alert: ID(11), broadcast: ID(12) };
   const lead = ID(9);
   await db.person.create({ data: { id: ids.person, orgId, name: `Person ${key}`, mobile: `+1555000${n}`, kind: 'volunteer' } });
   await db.person.create({ data: { id: lead, orgId, name: `Lead ${key}`, mobile: `+1555001${n}`, kind: 'employee' } });
@@ -27,5 +27,7 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
   await db.assignment.create({ data: { id: ids.assignment, orgId, eventId: ids.event, shiftId: ids.shift, personId: ids.person } });
   await db.personLink.create({ data: { orgId, eventId: ids.event, personId: ids.person, tokenHash: hashToken(`plink-${key}`), expiresAt: new Date(t.getTime() + 86_400_000) } });
   await db.runOfShowRow.create({ data: { id: ids.runOfShowRow, orgId, eventId: ids.event, sourceKey: `manual:${ids.runOfShowRow}`, manual: true, at: '09:00', cue: 'Doors open', sortOrder: 0 } });
+  await db.alert.create({ data: { id: ids.alert, orgId, eventId: ids.event, kind: 'no_show', personId: ids.person, assignmentId: ids.assignment, aorId: ids.aor } });
+  await db.broadcast.create({ data: { id: ids.broadcast, orgId, eventId: ids.event, audience: 'Whole event', body: 'Doors at 9', requiresAck: true, recipients: { create: { orgId, personId: ids.person } } } });
   return ids;
 }

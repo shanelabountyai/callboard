@@ -33,18 +33,18 @@ and go in `.env.local`; without them email is captured in the database, billing 
 
 ## Callboard
 
-Onsite staffing for live events: plan the crew, group areas under leads, invite employees and volunteers by SMS with one-tap confirm, and mirror the run of show from Excel or Smartsheet. The PRDs are the spec: see `NEXT.md` for the link.
+Onsite staffing for live events: plan the crew, group areas under leads, invite employees and volunteers by SMS with one-tap confirm, mirror the run of show from Excel or Smartsheet, then run the day: check-in (lead taps that work offline, SMS HERE, the person's page), no-show alerts that walk the lead → deputy → planner chain, help requests, float deploy, a coverage board, broadcasts with a one-tap "Got it", and a printable roster. The PRDs are the spec: see `NEXT.md` for the link.
 
 | Command | What it does |
 |---|---|
 | `npm run seed:demo && npm run seed:callboard` | demo accounts plus the Spring Expo for the Acme org (12 people, 2 AoRs, 16 shifts, a half-staffed plan) |
 | `npm run dev` | http://localhost:4600/demo, sign in as owner@acme.demo.test (DEMO_MODE=1) |
-| `npm test` | unit, integration and invariants; Callboard's are `tests/unit/callboard-lib.test.ts` and `tests/integration/callboard-reminders.test.ts` |
-| `npm run test:e2e -- e2e/callboard.spec.ts` | invite → SMS link → confirm without a login; .xlsx run-of-show import |
+| `npm test` | unit, integration and invariants; Callboard's are `tests/unit/callboard-lib.test.ts`, `tests/integration/callboard-reminders.test.ts` and `tests/integration/callboard-dayof.test.ts` |
+| `npm run test:e2e -- e2e/callboard.spec.ts` | invite → SMS link → confirm without a login; .xlsx run-of-show import; the board, self and lead check-in; a broadcast with Got it |
 
-Where things live: `prisma/schema/callboard.prisma` (tables), `src/lib/` (phone, CSV, xlsx reader, timezone, magic links, message templates, reminders), `src/app/o/[org]/{people,events}` (planner pages), `src/app/p/[token]` (the person's page, no login), `src/app/cron-jobs.ts` (T-7 and T-1 reminders, then the outbox drain).
+Where things live: `prisma/schema/callboard.prisma` (tables), `src/lib/` (phone, CSV, xlsx reader, timezone, magic links, message templates, reminders, `dayof.ts` for check-in and alerts, `inbound.ts` for SMS keywords, `broadcast.ts` for targeted sends), `src/app/o/[org]/{people,events}` (planner pages: plan, staff, board, messages, roster, run of show), `src/app/p/[token]` (the person's and lead's page, no login; `act/` takes its taps, `taps.tsx` queues them offline, `public/sw.js` keeps the page openable), `src/app/api/sms/inbound` (Twilio webhook, signature-checked, fails closed without `TWILIO_AUTH_TOKEN`), `src/app/cron-jobs.ts` (reminders, the day-of sweep, then the outbox drain).
 
-Messages: without Twilio keys every SMS and email is captured in `CapturedMessage` (read it with `psql`). Invites, nudges and releases drain the outbox immediately; the hourly cron sends the rest and the reminders.
+Messages: without Twilio keys every SMS and email is captured in `CapturedMessage` (read it with `psql`). Invites, nudges, releases, broadcasts and alerts drain the outbox immediately; the cron runs every 5 minutes (`vercel.json`) for reminders, no-show alerts and escalation. Point Twilio's inbound webhook at `APP_URL/api/sms/inbound`; the signature is computed over that exact URL.
 
 ## Commands
 

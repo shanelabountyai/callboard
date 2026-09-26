@@ -95,6 +95,9 @@ model Org {
   assignments    Assignment[] // app
   personLinks    PersonLink[] // app
   runOfShowRows  RunOfShowRow[] // app
+  alerts         Alert[] // app
+  broadcasts     Broadcast[] // app
+  broadcastRecipients BroadcastRecipient[] // app
 }
 
 model Membership {

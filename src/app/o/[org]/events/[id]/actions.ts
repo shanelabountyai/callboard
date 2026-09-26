@@ -25,9 +25,9 @@ export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.
 
 export const setEventDefaults = orgAction(
   null,
-  z.object({ id: ref('event'), callOffsetMin: int(0, 'Call offset cannot be negative.'), graceMin: int(0, 'Grace cannot be negative.') }),
+  z.object({ id: ref('event'), callOffsetMin: int(0, 'Call offset cannot be negative.'), graceMin: int(0, 'Grace cannot be negative.'), emergencyContact: z.string().trim().max(200).default('') }),
   async (ctx, i) => {
-    await db.event.update({ where: { id: i.id, ...inOrg(ctx) }, data: { callOffsetMin: i.callOffsetMin, graceMin: i.graceMin } }).catch(notFoundOnP2025);
+    await db.event.update({ where: { id: i.id, ...inOrg(ctx) }, data: { callOffsetMin: i.callOffsetMin, graceMin: i.graceMin, emergencyContact: i.emergencyContact } }).catch(notFoundOnP2025);
     redirect(page(ctx, i.id));
   },
 );
@@ -105,12 +105,14 @@ export const addPosition = orgAction(
     targetHeadcount: int(1, 'Target must be at least 1.'),
     uniform: z.string().trim().max(200).default(''),
     brief: z.string().trim().max(4000).default(''),
+    graceMin: z.union([z.literal(''), int(0, 'Grace cannot be negative.')]).default(''), // '' = the event default
+    isFloat: z.string().optional(),
   }),
   async (ctx, i) => {
     const area = must(await db.area.findFirst({ where: { id: i.areaId, ...inOrg(ctx) }, select: { eventId: true } }));
     if (i.minHeadcount > i.targetHeadcount) throw new Refused('Minimum cannot exceed target.');
-    const { areaId, ...rest } = i;
-    await db.position.create({ data: { ...inOrg(ctx), eventId: area.eventId, areaId, ...rest } });
+    const { areaId, graceMin, isFloat, ...rest } = i;
+    await db.position.create({ data: { ...inOrg(ctx), eventId: area.eventId, areaId, ...rest, graceMin: graceMin === '' ? null : graceMin, isFloat: isFloat === 'on' } });
     redirect(page(ctx, area.eventId));
   },
 );

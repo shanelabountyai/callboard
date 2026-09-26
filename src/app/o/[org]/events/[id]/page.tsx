@@ -40,7 +40,7 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
 
   return (
     <main>
-      <p><Link href={`/o/${ctx.slug}/events`}>Events</Link> · <Link href={`${base}/staff`}>Staff this event</Link> · <Link href={`${base}/ros`}>Run of show</Link></p>
+      <p><Link href={`/o/${ctx.slug}/events`}>Events</Link> · <Link href={`${base}/staff`}>Staff this event</Link> · <Link href={`${base}/board`}>Coverage board</Link> · <Link href={`${base}/messages`}>Messages</Link> · <Link href={`${base}/roster`}>Print roster</Link> · <Link href={`${base}/ros`}>Run of show</Link></p>
       <h1>{event.name}</h1>
       <p>
         {event.venue && `${event.venue} · `}{event.days.map((d) => fmtDay(d.date, 'UTC')).join(', ')} · {tz}
@@ -54,6 +54,7 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
         <input type="hidden" name="id" value={event.id} />
         <label>Default call offset (min before start) <input name="callOffsetMin" type="number" min={0} defaultValue={event.callOffsetMin} /></label>
         <label>No-show grace (min after call) <input name="graceMin" type="number" min={0} defaultValue={event.graceMin} /></label>
+        <label>Emergency contact (venue security / medical) <input name="emergencyContact" maxLength={200} defaultValue={event.emergencyContact} placeholder="Venue security 555-0100, radio 1" /></label>
         <button type="submit">Save defaults</button>
       </ActionForm>
 
@@ -114,7 +115,7 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
           </ActionForm>
           {area.positions.map((pos) => (
             <div key={pos.id} style={{ marginLeft: 16 }}>
-              <h4>{pos.name} <small>min {pos.minHeadcount}, target {pos.targetHeadcount}{pos.uniform && ` · wear ${pos.uniform}`}</small></h4>
+              <h4>{pos.name} <small>min {pos.minHeadcount}, target {pos.targetHeadcount}{pos.uniform && ` · wear ${pos.uniform}`}{pos.graceMin !== null && ` · grace ${pos.graceMin} min`}{pos.isFloat && ' · float pool'}</small></h4>
               {pos.brief && <p>{pos.brief}</p>}
               <ul>
                 {pos.shifts.map((s) => {
@@ -158,6 +159,8 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
               <label>Target <input name="targetHeadcount" type="number" min={1} defaultValue={2} /></label>
               <label>What to wear <input name="uniform" maxLength={200} /></label>
               <label>Brief (the position card) <textarea name="brief" rows={4} cols={60} maxLength={4000} /></label>
+              <label>No-show grace (min; blank = event default {event.graceMin}) <input name="graceMin" type="number" min={0} /></label>
+              <label><input type="checkbox" name="isFloat" /> Float pool (people here can be deployed to a short cell on the day)</label>
               <button type="submit">Add position</button>
             </ActionForm>
           </details>
