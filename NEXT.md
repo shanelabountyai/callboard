@@ -21,7 +21,7 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 (unrecognised replies are forwarded to the lead by SMS instead), change-notice drafting on shift edits.
 
 ## Backlog (in order)
-1. Deploy phase 1+2 (below). Vercel project `callboard` created 2026-09-26 (team shanelabountyai-8212s-projects).
+1. ~~Deploy phase 1+2~~ done 2026-09-26 (below). Still open: a Resend key so planners can sign in by email; 10DLC registration for volume.
 2. **Apply the design.** Run the design brief through Claude Design, then bring the result into the app: CSS custom
    properties for the tokens (light + dark), the component set from the brief's Components table, and the screens in
    the brief's order (person page first, lead roster, board, messages, plan, roster print). Replace the inline styles;
@@ -34,9 +34,10 @@ Neon project `callboard` (shiny-tree-44811929, org-morning-smoke-06224724); migr
 which reads the gitignored `.env.production.local` (DATABASE_URL pooled, DIRECT_URL direct, Twilio, Resend).
 Production env: AUTH_SECRET, CRON_SECRET (generated), APP_URL, DEMO_MODE=1, EMAIL_ENABLED=0 (no Resend key yet:
 planners sign in only via /demo until RESEND_API_KEY + EMAIL_FROM are set and EMAIL_ENABLED removed).
-Twilio: paste the three values into `.env.production.local`, run `scripts/deploy-twilio.sh` (pushes them to
-Vercel, sets the number's SMS webhook to APP_URL/api/sms/inbound), then redeploy. Demo data: `npm run seed:prod`
-(the +1555 demo numbers are unroutable, so real texts only reach people added to the directory).
+Twilio: set 2026-09-26 via `scripts/deploy-twilio.sh` (TWILIO_* in Vercel, the number's SMS webhook on
+APP_URL/api/sms/inbound, unsigned posts get 403). Auth token was rotated the same day after it leaked into a
+session trace. Production seeded with `npm run seed:prod` (demo org + Spring Expo; the +1555 demo numbers are
+unroutable, so real texts only reach people added to the directory).
 Any change to env alone needs a code push to redeploy: the ignoreCommand skips a no-diff redeploy.
 
 Note: /p pages must keep the default Referrer-Policy (`no-referrer` breaks the same-origin form POST).
