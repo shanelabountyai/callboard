@@ -15,6 +15,7 @@ export default async function OrgLayout({ children, params }: { children: React.
         <Link href={base}>Home</Link>
         <Link href={`${base}/events`}>Events</Link>
         <Link href={`${base}/people`}>People</Link>
+        <Link href={`${base}/cards`}>Cards</Link>
         <Link href={`${base}/settings/members`}>Members</Link>
         {can(ctx.role, 'billing.manage') && <Link href={`${base}/settings/billing`}>Billing</Link>}
         {can(ctx.role, 'org.delete') && <Link href={`${base}/settings/danger`}>Delete org</Link>}

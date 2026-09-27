@@ -11,6 +11,7 @@ test.afterAll(() => db.end());
 test.beforeAll(async () => {
   await db.query('DELETE FROM "RateLimit"');
   await db.query(`DELETE FROM "Event" WHERE name = 'Spring Expo'`); // a fresh expo every run; people are upserted
+  await db.query('DELETE FROM "PositionCard"'); // the library back to version 1, so the phase 3 test can run twice
   await seedDemo();
   await seedCallboard();
 });
@@ -141,4 +142,56 @@ test('messages: a broadcast with Got it reaches the audience and the ack shows o
   await expect(phone.getByRole('button', { name: 'Got it' })).toHaveCount(0);
   await page.reload();
   await expect(page.getByText(/1 of \d+ got it/)).toBeVisible();
+});
+
+// Phase 3 (PRD 6). Runs last in this file: it closes the event.
+test('after the event: the card reaches the person, tiers stay with planners, closing opens the lead’s review', async ({ page, context }) => {
+  await signInAsAcmeOwner(page);
+  await page.getByRole('link', { name: 'People' }).click();
+  // Three seeded past events: Tom came to all of them, Chloe missed two, Dev has only worked two.
+  await expect(page.getByRole('row').filter({ hasText: 'Tom Alvarez' })).toContainText('tier 1');
+  await expect(page.getByRole('row').filter({ hasText: 'Chloe Zhang' })).toContainText('tier 3');
+  await expect(page.getByRole('row').filter({ hasText: 'Dev Patel' })).toContainText('tier 2');
+
+  // The expo is live (the day-of test), so a new version of the card must not reach it.
+  await page.getByRole('link', { name: 'Cards' }).click();
+  const card = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Greeter/ }) });
+  await card.getByText('Edit Greeter').click();
+  await card.locator('textarea[name="never"]').fill('Leave the post without a swap, or guess at a VIP.');
+  await card.getByRole('button', { name: 'Save as version 2' }).click();
+  await expect(card.getByRole('heading', { name: /Greeter version 2/ })).toBeVisible();
+
+  const { ensurePersonLink } = await import('../src/lib/links');
+  const { db: prisma } = await import('../src/core/db');
+  const { rows: [tom] } = await db.query(`SELECT id, "orgId" FROM "Person" WHERE mobile = '+15550100006'`);
+  const { rows: [event] } = await db.query(`SELECT id FROM "Event" WHERE name = 'Spring Expo'`);
+  const tomUrl = await ensurePersonLink(prisma, { orgId: tom.orgId, eventId: event.id, personId: tom.id }, new Date(Date.now() + 86_400_000));
+  const phone = await (await context.browser()!.newContext()).newPage();
+  await phone.goto(tomUrl);
+  await expect(phone.getByText('Welcome every attendee').first()).toBeVisible();
+  await expect(phone.getByText('Leave the post without a swap.', { exact: true }).first()).toBeVisible(); // version 1, frozen
+  await expect(phone.getByText(/guess at a VIP/)).toHaveCount(0);
+  await expect(phone.getByText(/tier \d/)).toHaveCount(0); // never on a person's own page
+
+  await page.getByRole('link', { name: 'Events' }).first().click();
+  await page.getByRole('link', { name: 'Spring Expo' }).click();
+  await page.locator('select[name="status"]').selectOption('closed');
+  await page.getByRole('button', { name: 'Set status' }).click();
+  await expect(page.getByRole('heading', { name: 'Review: Spring Expo' })).toBeVisible();
+  await expect(page.getByText(/areas still open/)).toBeVisible();
+
+  const { rows } = await db.query(`SELECT body FROM "CapturedMessage" WHERE "to" = '+15550100001' AND body LIKE '%/review%' ORDER BY "createdAt" DESC LIMIT 1`);
+  const lead = await (await context.browser()!.newContext()).newPage();
+  await lead.goto(rows[0].body.match(/https?:\/\/\S+\/p\/[\w-]+\/review/)![0]);
+  const reg = lead.locator('section').filter({ has: lead.getByRole('heading', { name: 'Registration' }) });
+  await expect(reg.getByLabel('What happened: Tom Alvarez')).toHaveValue('late'); // he checked in after call time plus grace
+  await reg.getByLabel('Have Tom Alvarez back?').selectOption('yes');
+  await reg.getByLabel('When were you short-staffed?').fill('8 to 9am');
+  await reg.getByLabel('When did you have too many people?').fill('never');
+  await reg.getByLabel('What went wrong?').fill('nothing');
+  await reg.getByRole('button', { name: 'Save Registration' }).click();
+  await expect(lead.getByRole('status')).toContainText('Saved. 1 to go.'); // Marcus also owns the Info Desk
+
+  await page.reload();
+  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: /^Registration/ }) })).toContainText('Reviewed by Marcus Bell');
 });

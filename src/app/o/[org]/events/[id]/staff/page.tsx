@@ -4,6 +4,8 @@ import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
 import { aor as stripe } from '@/lib/colors';
+import { shownTier, tiersFor } from '@/lib/review';
+import { TierPill } from '@/lib/review-fields';
 import { inviteCap } from '@/lib/staffing';
 import { fmtDay, fmtTime } from '@/lib/time';
 import { invite, nudgeUnconfirmed, setAssignmentStatus } from './actions';
@@ -23,7 +25,9 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
     },
   });
   if (!event) notFound();
-  const people = await db.person.findMany({ where: inOrg(ctx), orderBy: { name: 'asc' } });
+  const tiers = await tiersFor(ctx.orgId);
+  // Most reliable first, so the 7am openers get filled from the top of the list (PRD 3).
+  const people = (await db.person.findMany({ where: inOrg(ctx), orderBy: { name: 'asc' } })).map((p) => ({ ...p, tier: shownTier(p, tiers) })).sort((a, b) => a.tier.tier - b.tier.tier);
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const tz = event.timezone;
   const all = event.days.flatMap((d) => d.shifts.flatMap((s) => s.assignments));
@@ -75,7 +79,7 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
                     <div className="columns">
                       {people.filter((p) => !onShift.has(p.id)).map((p) => (
                         <label key={p.id}>
-                          <input type="checkbox" name={`p:${p.id}`} /> {p.name} <small>({p.kind}{p.department && `, ${p.department}`})</small>
+                          <input type="checkbox" name={`p:${p.id}`} /> {p.name} <TierPill t={p.tier} /> <small>({p.kind}{p.department && `, ${p.department}`})</small>
                         </label>
                       ))}
                     </div>

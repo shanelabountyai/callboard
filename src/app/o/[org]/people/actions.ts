@@ -77,3 +77,11 @@ export const deletePerson = orgAction(null, z.object({ id: ref('person') }), asy
   await audit(ctx, 'person.deleted', { targetType: 'person', targetId: id });
   redirect(page(ctx));
 });
+
+/** A planner's override of the computed tier (PRD 3), with the reason kept beside it. Blank returns to history. */
+export const setTier = orgAction(null, z.object({ id: ref('person'), tier: z.enum(['', '1', '2', '3']), note: z.string().trim().max(200).default('') }), async (ctx, i) => {
+  if (i.tier && !i.note) throw new Refused('Say why, so the next planner knows the tier was set by hand.');
+  await db.person.update({ where: { id: i.id, ...inOrg(ctx) }, data: { tierOverride: i.tier ? Number(i.tier) : null, tierNote: i.tier ? i.note : '' } }).catch(notFoundOnP2025);
+  await audit(ctx, 'person.tier_set', { targetType: 'person', targetId: i.id, data: { tier: i.tier || null } });
+  redirect(page(ctx));
+});

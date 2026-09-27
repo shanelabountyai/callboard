@@ -21,6 +21,21 @@ const PEOPLE: [string, string, 'employee' | 'volunteer', string][] = [
   ['Finn Murphy', '+15550100012', 'volunteer', ''],
 ];
 
+// The card library (PRD 6): what each job is. Uniform, location, lead and call time stay on the event.
+const CARDS: { title: string; purpose: string; duties: string[]; situations: string[]; never: string; demands: string }[] = [
+  { title: 'Greeter', purpose: 'The first face an attendee sees.', duties: ['Welcome every attendee', 'Point them to the right badge line', 'Keep the doorway clear'], situations: ['A VIP is not on the list: radio your lead, never turn them away', 'Someone is lost: walk them to the info desk'], never: 'Leave the post without a swap.', demands: 'On your feet for the whole shift.' },
+  { title: 'Badge printer', purpose: 'Every attendee leaves with the right badge.', duties: ['Print and hand over badges', 'Check the name against ID', 'Keep badge stock topped up'], situations: ['The printer jams: slow the line rather than force it', 'A name is misspelled: reprint, keep the old badge'], never: 'Hand a badge to anyone but the person named on it.', demands: 'Comfortable with a laptop and a label printer.' },
+  { title: 'Info', purpose: 'The answer to where-is and when-is.', duties: ['Answer questions', 'Hand out maps', 'Log lost property'], situations: ['Lost child or medical: call venue security first, then radio your lead'], never: 'Guess. Radio your lead if you do not know.', demands: '' },
+  { title: 'Floor runner', purpose: 'Keeps the exhibit floor moving.', duties: ['Walk the aisles', 'Help exhibitors with power and supplies', 'Report anything blocking an aisle'], situations: ['An exhibitor has no power: radio your lead with the booth number'], never: 'Move an exhibitor’s stock without them.', demands: 'Lifting up to 15 kg; a lot of walking.' },
+  { title: 'Floater', purpose: 'Goes where a position is short.', duties: ['Wait at the ops desk', 'Go where the planner sends you', 'Read the card for the position you are sent to'], situations: [], never: 'Wander off: the planner needs to find you in a minute.', demands: '' },
+];
+// Past events give the directory a history, so tiers mean something in the demo: who showed, who was late, who never came.
+const PAST: [string, number][] = [['Winter Summit', 200], ['Autumn Forum', 290], ['Summer Fair', 380]]; // name, days ago
+const HISTORY: Record<string, ('showed' | 'late' | 'no_show')[]> = {
+  'Tom Alvarez': ['showed', 'showed', 'showed'], 'Ana Lima': ['showed', 'late', 'showed'], 'Jen Park': ['showed', 'showed', 'showed'],
+  'Ben Okafor': ['no_show', 'showed', 'showed'], 'Chloe Zhang': ['no_show', 'showed', 'no_show'], 'Dev Patel': ['showed', 'showed'],
+};
+
 export async function seedCallboard(slug = 'acme') {
   const org = await db.org.findUnique({ where: { slug } });
   if (!org) throw new Error(`Org "${slug}" not found: run seed:demo first`);
@@ -33,6 +48,41 @@ export async function seedCallboard(slug = 'acme') {
       update: { name, kind, department },
     });
     people.set(name, p.id);
+  }
+  const owner = await db.membership.findFirstOrThrow({ where: { orgId, role: 'owner' }, select: { userId: true } });
+  const cards = new Map<string, string>();
+  for (const c of CARDS) {
+    const key = c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const card = await db.positionCard.upsert({
+      where: { orgId_key_version: { orgId, key, version: 1 } },
+      create: { orgId, key, version: 1, title: c.title, purpose: c.purpose, duties: c.duties.join('\n'), situations: c.situations.join('\n'), never: c.never, demands: c.demands, changedBy: owner.userId },
+      update: {},
+    });
+    cards.set(c.title, card.id);
+    // An expo seeded before the library existed gets its cards too.
+    await db.position.updateMany({ where: { orgId, name: c.title, cardId: null, event: { name: 'Spring Expo' } }, data: { cardId: card.id } });
+  }
+  for (const [n, [name, daysAgo]] of PAST.entries()) {
+    if (await db.event.findFirst({ where: { orgId, name } })) continue;
+    const date = new Date(Date.now() - daysAgo * 86_400_000);
+    date.setUTCHours(0, 0, 0, 0);
+    const ymd = date.toISOString().slice(0, 10);
+    const [startAt, endAt] = [zonedToUtc(ymd, '08:00', TZ), zonedToUtc(ymd, '12:00', TZ)];
+    const callAt = new Date(startAt.getTime() - 45 * 60_000);
+    const past = await db.event.create({ data: { orgId, name, venue: 'Lakeside Convention Center', timezone: TZ, status: 'closed', closedAt: new Date(endAt.getTime() + 3_600_000), days: { create: { orgId, date } } }, include: { days: true } });
+    const aor = await db.aor.create({ data: { orgId, eventId: past.id, name: 'Front of house', color: '#2563eb', leadId: people.get('Marcus Bell') } });
+    const area = await db.area.create({ data: { orgId, eventId: past.id, name: 'Registration', location: 'North Lobby', aorId: aor.id } });
+    const pos = await db.position.create({ data: { orgId, eventId: past.id, areaId: area.id, name: 'Greeter', minHeadcount: 2, targetHeadcount: 6, cardId: cards.get('Greeter') } });
+    const shift = await db.shift.create({ data: { orgId, eventId: past.id, positionId: pos.id, dayId: past.days[0]!.id, callAt, startAt, endAt, needed: 6 } });
+    for (const [who, outcomes] of Object.entries(HISTORY)) {
+      const o = outcomes[n];
+      if (!o) continue;
+      const checkedInAt = o === 'no_show' ? null : new Date(callAt.getTime() + (o === 'late' ? 40 : 5) * 60_000);
+      await db.assignment.create({
+        data: { orgId, eventId: past.id, shiftId: shift.id, personId: people.get(who)!, status: 'confirmed', checkedInAt, checkInMethod: checkedInAt ? 'lead' : '', checkedOutAt: checkedInAt && endAt, checkOutMethod: checkedInAt ? 'lead' : '' },
+      });
+    }
+    await db.areaReview.create({ data: { orgId, eventId: past.id, areaId: area.id, understaffed: '8 to 9am', overstaffed: 'After 11am', wentWrong: 'Badge stock ran low at 9', by: 'Marcus Bell', at: new Date(endAt.getTime() + 86_400_000) } });
   }
   if (await db.event.findFirst({ where: { orgId, name: 'Spring Expo' } })) return 'Spring Expo already seeded';
 
@@ -48,20 +98,20 @@ export async function seedCallboard(slug = 'acme') {
   const floor = await db.aor.create({ data: { orgId, eventId: event.id, name: 'Exhibit floor', color: '#059669', radioChannel: '3', leadId: people.get('Sofia Reyes') } });
   const plan = [
     { area: 'Registration', location: 'North Lobby', aor: foh.id, positions: [
-      { name: 'Greeter', min: 2, target: 3, uniform: 'Black polo, name badge', brief: 'Welcome attendees, point them to the right badge line. If a VIP is not on the list, radio channel 2 for Marcus. Never leave the post without a swap.' },
-      { name: 'Badge printer', min: 1, target: 2, uniform: 'Black polo', brief: 'Print and hand over badges. Printer 2 jams above 40 an hour: slow the line rather than force it.' },
+      { name: 'Greeter', min: 2, target: 3, uniform: 'Black polo, name badge', brief: 'VIP list is at the ops desk; radio channel 2 for Marcus.' },
+      { name: 'Badge printer', min: 1, target: 2, uniform: 'Black polo', brief: 'Printer 2 jams above 40 an hour.' },
     ] },
-    { area: 'Info Desk', location: 'Hall B entrance', aor: foh.id, positions: [{ name: 'Info', min: 1, target: 2, uniform: 'Black polo', brief: 'Answer where-is questions. Lost child or medical: call venue security on 555-0100, then radio 2.' }] },
+    { area: 'Info Desk', location: 'Hall B entrance', aor: foh.id, positions: [{ name: 'Info', min: 1, target: 2, uniform: 'Black polo', brief: 'Venue security is 555-0100; your radio channel is 2.' }] },
     { area: 'Exhibit Hall', location: 'Hall A', aor: floor.id, positions: [
-      { name: 'Floor runner', min: 2, target: 3, uniform: 'Green vest over your own clothes', brief: 'Walk the aisles, help exhibitors with power and supplies, report anything blocking an aisle.' },
-      { name: 'Floater', min: 0, target: 2, uniform: 'Green vest', brief: 'Wait at the ops desk; the planner will send you where a position is short.', isFloat: true, grace: 20 },
+      { name: 'Floor runner', min: 2, target: 3, uniform: 'Green vest over your own clothes', brief: '' },
+      { name: 'Floater', min: 0, target: 2, uniform: 'Green vest', brief: 'The ops desk is by the Hall A loading door.', isFloat: true, grace: 20 },
     ] },
   ];
   const shiftIds: string[] = [];
   for (const a of plan) {
     const area = await db.area.create({ data: { orgId, eventId: event.id, name: a.area, location: a.location, aorId: a.aor } });
     for (const p of a.positions) {
-      const pos = await db.position.create({ data: { orgId, eventId: event.id, areaId: area.id, name: p.name, minHeadcount: p.min, targetHeadcount: p.target, uniform: p.uniform, brief: p.brief, isFloat: 'isFloat' in p && p.isFloat, graceMin: 'grace' in p ? p.grace : null } });
+      const pos = await db.position.create({ data: { orgId, eventId: event.id, areaId: area.id, name: p.name, minHeadcount: p.min, targetHeadcount: p.target, uniform: p.uniform, brief: p.brief, cardId: cards.get(p.name), isFloat: 'isFloat' in p && p.isFloat, graceMin: 'grace' in p ? p.grace : null } });
       for (const day of event.days) {
         for (const [s, e] of [['07:30', '12:00'], ['12:00', '17:00']] as const) {
           const ymd = day.date.toISOString().slice(0, 10);

@@ -10,6 +10,7 @@ import { AOR_HEX } from '@/lib/colors';
 import { ensurePersonLink } from '@/lib/links';
 import { notify } from '@/lib/messages';
 import { must } from '@/lib/refuse';
+import { openReviews } from '@/lib/review';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { isHm, ymd, zonedToUtc } from '@/lib/time';
 
@@ -19,9 +20,29 @@ const optionalRef = (model: string) => z.union([ref(model), z.literal('')]);
 const int = (min: number, msg: string) => z.coerce.number().int().min(min, msg);
 
 export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.enum(['draft', 'staffing', 'confirmed', 'live', 'closed']) }), async (ctx, i) => {
-  await db.event.update({ where: { id: i.id, ...inOrg(ctx) }, data: { status: i.status } }).catch(notFoundOnP2025);
-  await audit(ctx, 'event.status', { targetType: 'event', targetId: i.id, data: { status: i.status } });
-  redirect(page(ctx, i.id));
+  const event = must(await db.event.findFirst({ where: { id: i.id, ...inOrg(ctx) } }));
+  // The first close starts the review (PRD 6): leads get their link. Reopening and closing again does not text them twice.
+  const firstClose = i.status === 'closed' && !event.closedAt;
+  await db.$transaction(async (tx) => {
+    await tx.event.update({ where: { id: event.id }, data: { status: i.status } });
+    if (firstClose) await openReviews(tx, event);
+    await audit(ctx, 'event.status', { targetType: 'event', targetId: i.id, data: { status: i.status } }, tx);
+  });
+  if (firstClose) await drainOutbox(25);
+  redirect(i.status === 'closed' ? `${page(ctx, i.id)}/review` : page(ctx, i.id));
+});
+
+/** Links a position to the latest version of a library card, or unlinks it. */
+const latestOf = async (ctx: OrgCtx, cardId: string) => {
+  const picked = must(await db.positionCard.findFirst({ where: { id: cardId, ...inOrg(ctx) }, select: { key: true } }));
+  return db.positionCard.findFirstOrThrow({ where: { ...inOrg(ctx), key: picked.key }, orderBy: { version: 'desc' }, select: { id: true } });
+};
+
+export const setPositionCard = orgAction(null, z.object({ id: ref('position'), cardId: optionalRef('positionCard') }), async (ctx, i) => {
+  const p = must(await db.position.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { eventId: true } }));
+  const card = i.cardId ? await latestOf(ctx, i.cardId) : null;
+  await db.position.update({ where: { id: i.id, ...inOrg(ctx) }, data: { cardId: card?.id ?? null } });
+  redirect(page(ctx, p.eventId));
 });
 
 export const setEventDefaults = orgAction(
@@ -106,14 +127,16 @@ export const addPosition = orgAction(
     targetHeadcount: int(1, 'Target must be at least 1.'),
     uniform: z.string().trim().max(200).default(''),
     brief: z.string().trim().max(4000).default(''),
+    cardId: optionalRef('positionCard'),
     graceMin: z.union([z.literal(''), int(0, 'Grace cannot be negative.')]).default(''), // '' = the event default
     isFloat: z.string().optional(),
   }),
   async (ctx, i) => {
     const area = must(await db.area.findFirst({ where: { id: i.areaId, ...inOrg(ctx) }, select: { eventId: true } }));
+    const { areaId, graceMin, isFloat, cardId, ...rest } = i;
+    const card = cardId ? await latestOf(ctx, cardId) : null;
     if (i.minHeadcount > i.targetHeadcount) throw new Refused('Minimum cannot exceed target.');
-    const { areaId, graceMin, isFloat, ...rest } = i;
-    await db.position.create({ data: { ...inOrg(ctx), eventId: area.eventId, areaId, ...rest, graceMin: graceMin === '' ? null : graceMin, isFloat: isFloat === 'on' } });
+    await db.position.create({ data: { ...inOrg(ctx), eventId: area.eventId, areaId, ...rest, cardId: card?.id ?? null, graceMin: graceMin === '' ? null : graceMin, isFloat: isFloat === 'on' } });
     redirect(page(ctx, area.eventId));
   },
 );

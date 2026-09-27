@@ -47,6 +47,15 @@ Object.assign(templates, {
     subject: `${s(d.event)}: new position`,
     body: `${s(d.name)}, please move to ${s(d.position)} at ${s(d.area)}${d.location ? ` (${s(d.location)})` : ''} now. Lead: ${s(d.lead)}. Details: ${s(d.url)}`,
   }),
+  // After the event (PRD 6).
+  cb_review: (d) => ({
+    subject: `${s(d.event)}: your three-minute review`,
+    body: `${s(d.name)}, thank you for leading at ${s(d.event)}. One last thing, about three minutes: who showed, and what to fix next time. ${s(d.url)}`,
+  }),
+  cb_review_due: (d) => ({
+    subject: `${s(d.event)}: reviews still open after a week`,
+    body: `Planner: ${s(d.event)} closed a week ago and these areas have no review: ${s(d.areas)}. Finish them from the check-in data or waive them with a note: ${s(d.url)}`,
+  }),
   // A planner's message (PRD 4). Over 320 characters it becomes a pointer to the page, where the full text waits.
   cb_broadcast: (d) => {
     const ack = d.requiresAck ? ` Got it? Reply GOT IT or tap ${s(d.url)}` : '';

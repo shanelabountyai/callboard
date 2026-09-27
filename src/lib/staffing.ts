@@ -5,7 +5,7 @@ import { fmtTime, fmtWhen } from './time';
 export const assignmentInclude = {
   person: true,
   event: true,
-  shift: { include: { day: true, position: { include: { area: { include: { aor: { include: { lead: true, deputy: true } } } } } } } },
+  shift: { include: { day: true, position: { include: { card: true, area: { include: { aor: { include: { lead: true, deputy: true } } } } } } } },
 } satisfies Prisma.AssignmentInclude;
 export type FullAssignment = Prisma.AssignmentGetPayload<{ include: typeof assignmentInclude }>;
 

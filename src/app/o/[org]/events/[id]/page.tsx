@@ -3,9 +3,10 @@ import { notFound } from 'next/navigation';
 import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
+import { latestCards } from '@/lib/cards';
 import { AOR_COLORS, aor as stripe } from '@/lib/colors';
 import { fmtDay, fmtTime } from '@/lib/time';
-import { addAor, addArea, addPosition, addShift, deleteAor, deleteArea, deletePosition, deleteShift, setAorLead, setAreaAor, setEventDefaults, setStatus } from './actions';
+import { addAor, addArea, addPosition, addShift, deleteAor, deleteArea, deletePosition, deleteShift, setAorLead, setAreaAor, setEventDefaults, setPositionCard, setStatus } from './actions';
 
 export const metadata = { title: 'Event' };
 
@@ -22,12 +23,13 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
       aors: { include: { lead: true, deputy: true }, orderBy: { name: 'asc' } },
       areas: {
         orderBy: { name: 'asc' },
-        include: { positions: { orderBy: { name: 'asc' }, include: { shifts: { orderBy: { startAt: 'asc' }, include: { day: true, assignments: { select: { status: true } } } } } } },
+        include: { positions: { orderBy: { name: 'asc' }, include: { card: true, shifts: { orderBy: { startAt: 'asc' }, include: { day: true, assignments: { select: { status: true } } } } } } },
       },
     },
   });
   if (!event) notFound();
   const people = await db.person.findMany({ where: inOrg(ctx), orderBy: { name: 'asc' }, select: { id: true, name: true } });
+  const cards = await latestCards(ctx.orgId);
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const tz = event.timezone;
   const base = `/o/${ctx.slug}/events/${event.id}`;
@@ -41,7 +43,7 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
 
   return (
     <main>
-      <p className="crumbs"><Link href={`/o/${ctx.slug}/events`}>Events</Link> <Link href={`${base}/staff`}>Staff this event</Link> <Link href={`${base}/board`}>Coverage board</Link> <Link href={`${base}/messages`}>Messages</Link> <Link href={`${base}/roster`}>Print roster</Link> <Link href={`${base}/ros`}>Run of show</Link></p>
+      <p className="crumbs"><Link href={`/o/${ctx.slug}/events`}>Events</Link> <Link href={`${base}/staff`}>Staff this event</Link> <Link href={`${base}/board`}>Coverage board</Link> <Link href={`${base}/messages`}>Messages</Link> <Link href={`${base}/roster`}>Print roster</Link> <Link href={`${base}/ros`}>Run of show</Link> <Link href={`${base}/review`}>Review</Link></p>
       <h1>{event.name}</h1>
       <p>
         {event.venue && `${event.venue} · `}{event.days.map((d) => fmtDay(d.date, 'UTC')).join(', ')} · {tz}
@@ -123,6 +125,17 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
             <div key={pos.id} className="card">
               <h4>{pos.name} <small>min {pos.minHeadcount}, target {pos.targetHeadcount}{pos.uniform && ` · wear ${pos.uniform}`}{pos.graceMin !== null && ` · grace ${pos.graceMin} min`}{pos.isFloat && ' · float pool'}</small></h4>
               {pos.brief && <p>{pos.brief}</p>}
+              <ActionForm action={bind(setPositionCard)}>
+                <input type="hidden" name="id" value={pos.id} />
+                <label>
+                  Card{pos.card && ` (version ${pos.card.version}${cards.some((c) => c.key === pos.card!.key && c.version > pos.card!.version) ? `, kept from when the event went live; the library is at ${cards.find((c) => c.key === pos.card!.key)!.version}` : ''})`}{' '}
+                  <select name="cardId" defaultValue={cards.find((c) => c.key === pos.card?.key)?.id ?? ''} aria-label={`Card for ${pos.name}`}>
+                    <option value="">No card</option>
+                    {cards.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                  </select>
+                </label>
+                <button type="submit">Set card</button>
+              </ActionForm>
               <ul className="plain">
                 {pos.shifts.map((s) => {
                   const c = count([s]);
@@ -164,7 +177,8 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
               <label>Minimum <input name="minHeadcount" type="number" min={0} defaultValue={1} /></label>
               <label>Target <input name="targetHeadcount" type="number" min={1} defaultValue={2} /></label>
               <label>What to wear <input name="uniform" maxLength={200} /></label>
-              <label>Brief (the position card) <textarea name="brief" rows={4} cols={60} maxLength={4000} /></label>
+              <label>Card from the library <select name="cardId" defaultValue=""><option value="">No card</option>{cards.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select></label>
+              <label>Notes for this event only <textarea name="brief" rows={3} cols={60} maxLength={4000} /></label>
               <label>No-show grace (min; blank = event default {event.graceMin}) <input name="graceMin" type="number" min={0} /></label>
               <label><input type="checkbox" name="isFloat" /> Float pool (people here can be deployed to a short cell on the day)</label>
               <button type="submit">Add position</button>

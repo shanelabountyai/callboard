@@ -15,6 +15,14 @@ enum EventStatus {
   closed
 }
 
+/// What happened on a shift (PRD 6). Pre-filled from check-in data; the lead's review can overrule it.
+enum ReviewOutcome {
+  showed
+  late
+  no_show
+  left_early
+}
+
 enum AssignmentStatus {
   invited
   confirmed
@@ -34,6 +42,8 @@ model Person {
   department  String       @default("")
   notes       String       @default("") // internal: never rendered on the person's own page
   smsOptOut   Boolean      @default(false)
+  tierOverride Int? // 1..3 set by hand; null = the tier computed from history (src/lib/review.ts)
+  tierNote    String       @default("") // why it was set by hand; never rendered on the person's own page
   createdAt   DateTime     @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime     @updatedAt @db.Timestamptz(6)
   assignments Assignment[]
@@ -58,6 +68,8 @@ model Event {
   callOffsetMin Int            @default(45) // call time before shift start, the default for new shifts
   graceMin      Int            @default(15) // no-show grace after call time; a position can override (PRD 5)
   emergencyContact String      @default("") // venue security / medical; shown first on a medical or security help request
+  closedAt      DateTime?      @db.Timestamptz(6) // first time the status became closed; the review clock starts here (PRD 6)
+  reviewAskedAt DateTime?      @db.Timestamptz(6) // the planner was asked to finish or waive the reviews still open after 7 days
   createdAt     DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
   days          EventDay[]
@@ -70,6 +82,8 @@ model Event {
   runOfShow     RunOfShowRow[]
   alerts        Alert[]
   broadcasts    Broadcast[]
+  reviews       Review[]
+  areaReviews   AreaReview[]
 
   @@index([orgId, createdAt])
 }
@@ -117,6 +131,7 @@ model Area {
   name      String
   location  String     @default("")
   positions Position[]
+  review    AreaReview?
 
   @@index([eventId])
 }
@@ -133,12 +148,15 @@ model Position {
   minHeadcount    Int     @default(1) // the number that breaks the event
   targetHeadcount Int     @default(1)
   uniform         String  @default("")
-  brief           String  @default("") // the position card, inline until the library lands (phase 3)
+  brief           String  @default("") // notes for this event only; the reusable part is the card
+  cardId          String? @db.Uuid // one version of a library card; an edit to the library repoints only events not yet live
+  card            PositionCard? @relation(fields: [cardId], references: [id], onDelete: SetNull)
   graceMin        Int? // no-show grace in minutes; null = the event's default (PRD 5: doors 5, floaters 20)
   isFloat         Boolean @default(false) // the float pool: people here can be deployed to a red cell on the day
   shifts          Shift[]
 
   @@index([areaId])
+  @@index([cardId])
 }
 
 model Shift {
@@ -185,6 +203,7 @@ model Assignment {
   checkOutMethod String          @default("") // lead | self | sms | planner | auto (shift end + 60 min, flagged)
   createdAt     DateTime         @default(now()) @db.Timestamptz(6)
   alerts        Alert[]
+  review        Review?
 
   @@unique([shiftId, personId])
   @@index([personId])
@@ -287,4 +306,65 @@ model BroadcastRecipient {
 
   @@unique([broadcastId, personId])
   @@index([personId, ackedAt])
+}
+
+/// The position card library (PRD 6): what the job is, written once and reused. One row per version;
+/// versions are linear per (org, key), so two planners saving at once cannot both win. What to wear,
+/// where to report, the lead and the call time are slots filled from the position, area and shift.
+model PositionCard {
+  id         String     @id @default(uuid()) @db.Uuid
+  orgId      String     @db.Uuid
+  org        Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key        String // slug of the first title; never changes, so a rename keeps its history
+  version    Int
+  title      String
+  purpose    String     @default("") // one line
+  duties     String     @default("") // what you do: one per line, five at most
+  situations String     @default("") // what to do if: one per line, five at most
+  never      String     @default("") // what you must never do
+  demands    String     @default("") // skills and physical demands
+  minAge     Int? // age restriction; planner-facing
+  changedBy  String     @db.Uuid // the User who saved this version; no foreign key, like the audit log
+  createdAt  DateTime   @default(now()) @db.Timestamptz(6)
+  positions  Position[]
+
+  @@unique([orgId, key, version])
+}
+
+/// A lead's (or planner's) word on one assignment after the event (PRD 6). Optional per person.
+model Review {
+  id           String        @id @default(uuid()) @db.Uuid
+  orgId        String        @db.Uuid
+  org          Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId      String        @db.Uuid
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignmentId String        @unique @db.Uuid
+  assignment   Assignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  outcome      ReviewOutcome
+  rehire       Boolean? // would you have them back; null = no opinion
+  note         String        @default("")
+  by           String // the reviewer's name as it was, so the row reads the same after they leave
+  at           DateTime      @db.Timestamptz(6)
+
+  @@index([eventId])
+}
+
+/// The three questions per area (PRD 6), required before the event's review is complete unless the planner waives it.
+model AreaReview {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @db.Uuid
+  org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId      String   @db.Uuid
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  areaId       String   @unique @db.Uuid
+  area         Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  understaffed String   @default("") // when were you short
+  overstaffed  String   @default("") // when did you have too many
+  wentWrong    String   @default("") // what went wrong
+  waived       Boolean  @default(false)
+  waiveNote    String   @default("")
+  by           String
+  at           DateTime @db.Timestamptz(6)
+
+  @@index([eventId])
 }

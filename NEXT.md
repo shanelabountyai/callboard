@@ -1,6 +1,14 @@
 # NEXT
 
-## Callboard (onsite staffing) — phase 2 built 2026-09-26
+> **Foundation upgrade waiting (2026-09-27): `v1.0.2`** — FR-01 outbox fix (send no longer inside the claim tx; a slow provider
+> was delivered but never recorded, then re-sent every cron run). `git fetch template --tags && git merge v1.0.2`, no migration;
+> re-run your outbox tests (a clone that wraps `drainOutbox` or its transports may conflict).
+> **Then `v1.0.3` (security, take within 7 days)** — FR-02..05: pending-MFA 10-min TTL + daily wrong-code cap, invite send caps,
+> org bound to one Stripe subscription (checkout refused while live), org deletion cancels the subscription first.
+> `git merge v1.0.3`, then **`npm run db:migrate`** (adds `BillingAccount.stripeSubscriptionId`; deployed clones: migrate prod too).
+> New clone-owned `src/app/org-hooks.ts`; a custom `PaymentProvider` needs `cancel()`. v1.1.0 (FR-06..11) follows.
+
+## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
 Design brief for Claude Design (2026-09-26): https://claude.ai/code/artifact/7213f59c-5108-4cad-957d-d3615818380d
 Repo: https://github.com/shanelabountyai/callboard (private). Port 4600. Clone of saas-foundation v1.0.1.
@@ -23,7 +31,48 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 ## Backlog (in order)
 1. ~~Deploy phase 1+2~~ done 2026-09-26 (below). Still open: a Resend key so planners can sign in by email; 10DLC registration for volume.
 2. ~~Apply the design~~ done 2026-09-26, built straight from the design brief (below).
-3. Phase 3 (PRD 6: position card library, reliability record, review).
+3. ~~Phase 3, first slice~~ built 2026-09-27 on branch `phase-3` (below): card library, lead review, reliability tiers. **Not merged: see "Ship phase 3".**
+4. Foundation upgrade to v1.0.2 (the note at the top of this file). Callboard calls `drainOutbox` from actions and the cron, so re-run the outbox and day-of tests after the merge.
+5. Phase 3, second slice (the rest of PRD 6 P0): post-event report, event templates with save-as-template, area playbooks, standard rules with per-event override, thank-you and come-back message. Then PRD 3 swaps.
+
+## Ship phase 3 (Shane, in this order)
+The production database must get the migration before main gets the code: main auto-deploys, and the new code selects columns
+(`Position.cardId`, `Event.closedAt`, `Person.tierOverride`) the old database does not have. The migration only adds, so the code
+running in production today keeps working after step 1.
+1. `npm run db:migrate:prod` (applies `20260927164228_phase3_consistency`)
+2. `git checkout main && git merge --ff-only phase-3 && git push`
+3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, and adds three closed past events so tiers
+   show in the demo. It is idempotent.
+
+## Phase 3, first slice 2026-09-27 (backlog 3)
+- **Cards** (`/o/[org]/cards`, nav "Cards"): title, purpose, what you do and what to do if (five lines each at most), never, skills and
+  demands, minimum age. One row per version in `PositionCard`, unique on (org, key, version), `changedBy` is the user. Saving carries
+  the version the editor opened; if it is no longer the latest the save is refused with "Version N was saved while you were editing".
+  A save repoints positions in events that are not live or closed; live and closed events keep the version they ran with.
+- **Slots**: uniform stays on the position, location on the area, lead and call time on the AoR and shift. The person's page renders
+  slots, then the card, then `Position.brief`, which is now "notes for this event only".
+- **Review**: the first time an event's status becomes closed, `closedAt` is stamped and each AoR's lead (deputy if none) is texted
+  `/p/<token>/review`. One form per area: what happened per person pre-filled from check-in, have them back yes / no / no opinion,
+  a note, and three required answers. The planner's `/o/[org]/events/[id]/review` shows completion per AoR and can finish or waive
+  (note required) any area. A week after the close the cron emails planners once about areas still open (`Event.reviewAskedAt`).
+- **Reliability**: no table. `src/lib/review.ts` reads each past assignment as showed / late / no-show / left early (the review wins
+  over the clock) and `tierOf` looks at the last 8 events. Tier 3 = two or more strikes (a no-show event, or a "would not rehire").
+  Tier 1 = at least 3 events, no strikes, at most one late or early exit. Tier 2 = everyone else, including no history.
+  Shown on People (with the reason and a set-by-hand override that needs a note), in the Staff invite list (sorted best first),
+  and on a lead's roster. Never on a person's own page.
+- Decisions: late means checked in after call time plus grace, the same line the no-show alert uses; left early means checked out
+  more than 15 minutes before the end, and an automatic close never counts; a decline never counts whatever the reason; a release
+  after a no-show alert still counts as the no-show; reviews open only on a closed event.
+- **Defaults taken on two open PRD decisions, both reversible, Shane to confirm**: any planner can edit the library (every version
+  names who saved it); tiers are computed for employees as well as volunteers (the HR question in the PRD checklist).
+- Skipped (add when asked): map pin slot (areas have a text location only), retiring or deleting a card, card translations,
+  a tier filter on the Staff page (the list is sorted by tier instead), showing tiers to a lead for people outside their AoR.
+- Gate: lint and typecheck clean; vitest 143 of 143 (8 new in `tests/integration/callboard-review.test.ts`); e2e `callboard` + `headers`
+  specs 8 of 8 against a production build. The invariant harness covers the six new actions with no registration.
+- Found on the way: a server action that redirects to its own path plus a `#anchor` leaves the page showing stale data in a
+  production build (the router scrolls instead of refreshing). Card saves redirect to the bare path.
+- Environment: the first gate run failed with a 180 s timeout in the invariant harness while three other projects ran sweeps
+  (load average 68). Alone it takes 12 s. Check `uptime` before reading that failure as a code problem.
 
 ## Design pass 2026-09-26 (backlog 2)
 Built from the brief itself, not from a Claude Design export: the brief already fixes the tokens, the eight AoR

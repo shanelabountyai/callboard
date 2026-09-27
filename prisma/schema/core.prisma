@@ -98,6 +98,9 @@ model Org {
   alerts         Alert[] // app
   broadcasts     Broadcast[] // app
   broadcastRecipients BroadcastRecipient[] // app
+  positionCards  PositionCard[] // app
+  reviews        Review[] // app
+  areaReviews    AreaReview[] // app
 }
 
 model Membership {

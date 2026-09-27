@@ -3,9 +3,12 @@ import { notFound } from 'next/navigation';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
 import { clientIp } from '@/core/http';
+import { CardView } from '@/lib/card-view';
 import { aor as stripe } from '@/lib/colors';
 import { dueAt, EARLY_MS, HELP_CATEGORIES, isOverdue } from '@/lib/dayof';
 import { readPersonLink } from '@/lib/links';
+import { shownTier, tiersFor } from '@/lib/review';
+import { TierPill } from '@/lib/review-fields';
 import { assignmentInclude, firstName } from '@/lib/staffing';
 import { fmtDay, fmtTime, fmtWhen } from '@/lib/time';
 import { Taps } from './taps';
@@ -50,6 +53,9 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
     }),
     db.broadcastRecipient.findMany({ where: { orgId, personId: person.id, broadcast: { eventId: event.id } }, include: { broadcast: true }, orderBy: { broadcast: { createdAt: 'desc' } }, take: 10 }),
   ]);
+  // Tiers are for leads and planners only (PRD 6): computed for a lead's crew, never rendered on anyone's own card.
+  const crew = leads.flatMap((aor) => aor.areas.flatMap((ar) => ar.positions.flatMap((p) => p.shifts.flatMap((s) => s.assignments.map((x) => x.personId)))));
+  const tiers = crew.length ? await tiersFor(orgId, crew) : new Map();
   const act = `/p/${token}/act`;
   const onDay = assignments.some((a) => a.shift.callAt.getTime() - EARLY_MS <= t.getTime() && t.getTime() <= a.shift.endAt.getTime() + 3_600_000);
 
@@ -84,6 +90,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
             {area.location && <p>Where: {area.location}</p>}
             {a.shift.position.uniform && <p>Wear: {a.shift.position.uniform}</p>}
             <p>Your lead: {lead ? <>{lead.name}, <a href={`tel:${lead.mobile}`}>{lead.mobile}</a></> : 'the event planner'}{area.aor?.radioChannel && ` · radio ${area.aor.radioChannel}`}</p>
+            {a.shift.position.card && <CardView card={a.shift.position.card} />}
             {a.shift.position.brief && <p className="pre">{a.shift.position.brief}</p>}
             <p>
               Status: <span className="pill" data-status={a.checkedOutAt ? 'done' : a.checkedInAt ? 'here' : a.status}>{a.status}</span>
@@ -133,6 +140,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
             {aor.leadId === person.id ? `Deputy: ${aor.deputy?.name ?? 'none'}` : `Lead: ${aor.lead?.name ?? 'none'}`}
             {aor.radioChannel && ` · radio ${aor.radioChannel}`}
           </p>
+          {event.status === 'closed' && <p><a href={`/p/${token}/review`}><strong>Review your crew</strong></a> (about three minutes): who showed, and what to fix next time.</p>}
           {aor.alerts.length > 0 && (
             <div>
               <h3>Needs you ({aor.alerts.length})</h3>
@@ -186,7 +194,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
                         return (
                           <li key={x.id} className="row">
                             <span className="grow">
-                              {x.person.name} · <a href={`tel:${x.person.mobile}`}>{x.person.mobile}</a> · <span className="pill" data-status={x.status}>{x.status}</span>
+                              {x.person.name} <TierPill t={shownTier(x.person, tiers)} /> · <a href={`tel:${x.person.mobile}`}>{x.person.mobile}</a> · <span className="pill" data-status={x.status}>{x.status}</span>
                               {x.checkedInAt && <> · <strong>here {fmtTime(x.checkedInAt, tz)}</strong></>}
                               {x.checkedOutAt && <> · out {fmtTime(x.checkedOutAt, tz)}{x.checkOutMethod === 'auto' && ' (auto)'}</>}
                               {overdue && <> · <span className="pill" data-status="overdue">overdue since {fmtTime(dueAt(full), tz)}</span></>}
