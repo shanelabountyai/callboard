@@ -18,7 +18,7 @@ const ROLES: Role[] = ['owner', 'admin', 'member'];
 export async function seedDemo() {
   const printed: string[] = [];
   for (const o of ORGS) {
-    const org = await db.org.upsert({ where: { slug: o.slug }, create: { slug: o.slug, name: o.name }, update: {} });
+    const org = await db.org.upsert({ where: { slug: o.slug }, create: { slug: o.slug, name: o.name }, update: { name: o.name } }); // a test run can leave `acme` named by its slug
     for (const role of ROLES) {
       const email = `${role}@${o.domain}`;
       const mfa = role !== 'member'; // owners and admins are TOTP-enrolled, as the guard requires

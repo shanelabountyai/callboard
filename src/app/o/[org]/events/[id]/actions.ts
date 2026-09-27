@@ -6,6 +6,7 @@ import { orgAction, ref } from '@/core/authz/action';
 import { inOrg, notFoundOnP2025, type OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
+import { AOR_HEX } from '@/lib/colors';
 import { ensurePersonLink } from '@/lib/links';
 import { notify } from '@/lib/messages';
 import { must } from '@/lib/refuse';
@@ -34,7 +35,7 @@ export const setEventDefaults = orgAction(
 
 export const addAor = orgAction(
   null,
-  z.object({ eventId: ref('event'), name: z.string().trim().min(1, 'Name the area of responsibility.').max(80), color: z.string().trim().max(9).default('#4f46e5'), radioChannel: z.string().trim().max(20).default('') }),
+  z.object({ eventId: ref('event'), name: z.string().trim().min(1, 'Name the area of responsibility.').max(80), color: z.enum(AOR_HEX as [string, ...string[]], { message: 'Pick one of the eight colours.' }).default(AOR_HEX[0]!), radioChannel: z.string().trim().max(20).default('') }),
   async (ctx, i) => {
     must(await db.event.findFirst({ where: { id: i.eventId, ...inOrg(ctx) }, select: { id: true } }));
     const a = await db.aor.create({ data: { ...inOrg(ctx), eventId: i.eventId, name: i.name, color: i.color, radioChannel: i.radioChannel } });

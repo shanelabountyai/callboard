@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
+import { AOR_COLORS, aor as stripe } from '@/lib/colors';
 import { fmtDay, fmtTime } from '@/lib/time';
 import { addAor, addArea, addPosition, addShift, deleteAor, deleteArea, deletePosition, deleteShift, setAorLead, setAreaAor, setEventDefaults, setStatus } from './actions';
 
@@ -35,12 +36,12 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
     confirmed: shifts.reduce((n, s) => n + s.assignments.filter((a) => a.status === 'confirmed').length, 0),
     invited: shifts.reduce((n, s) => n + s.assignments.filter((a) => a.status === 'invited').length, 0),
   });
-  const tone = (c: { needed: number; confirmed: number }) => (c.needed === 0 ? '' : c.confirmed >= c.needed ? '#16a34a' : c.confirmed >= 0.8 * c.needed ? '#d97706' : '#dc2626');
+  const tone = (c: { needed: number; confirmed: number }) => (c.needed === 0 ? undefined : c.confirmed >= c.needed ? 'green' : c.confirmed >= 0.8 * c.needed ? 'amber' : 'red');
   const total = count(event.areas.flatMap((a) => a.positions.flatMap((p) => p.shifts)));
 
   return (
     <main>
-      <p><Link href={`/o/${ctx.slug}/events`}>Events</Link> · <Link href={`${base}/staff`}>Staff this event</Link> · <Link href={`${base}/board`}>Coverage board</Link> · <Link href={`${base}/messages`}>Messages</Link> · <Link href={`${base}/roster`}>Print roster</Link> · <Link href={`${base}/ros`}>Run of show</Link></p>
+      <p className="crumbs"><Link href={`/o/${ctx.slug}/events`}>Events</Link> <Link href={`${base}/staff`}>Staff this event</Link> <Link href={`${base}/board`}>Coverage board</Link> <Link href={`${base}/messages`}>Messages</Link> <Link href={`${base}/roster`}>Print roster</Link> <Link href={`${base}/ros`}>Run of show</Link></p>
       <h1>{event.name}</h1>
       <p>
         {event.venue && `${event.venue} · `}{event.days.map((d) => fmtDay(d.date, 'UTC')).join(', ')} · {tz}
@@ -59,16 +60,16 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
       </ActionForm>
 
       <h2>Headcount</h2>
-      <p style={{ color: tone(total) }}>Whole event: {total.confirmed} confirmed of {total.needed} needed ({total.invited} still invited).</p>
+      <p data-tone={tone(total)}>Whole event: {total.confirmed} confirmed of {total.needed} needed ({total.invited} still invited).</p>
       <table>
         <thead><tr><th>Area</th><th>AoR</th><th>Needed</th><th>Confirmed</th><th>Invited</th><th>Gap</th></tr></thead>
         <tbody>
           {event.areas.map((a) => {
             const c = count(a.positions.flatMap((p) => p.shifts));
             return (
-              <tr key={a.id} style={{ color: tone(c) }}>
+              <tr key={a.id}>
                 <td>{a.name}</td><td>{event.aors.find((x) => x.id === a.aorId)?.name ?? 'Ungrouped (planner)'}</td>
-                <td>{c.needed}</td><td>{c.confirmed}</td><td>{c.invited}</td><td>{Math.max(0, c.needed - c.confirmed)}</td>
+                <td>{c.needed}</td><td className="cov" data-tone={tone(c)}>{c.confirmed}</td><td>{c.invited}</td><td>{Math.max(0, c.needed - c.confirmed)}</td>
               </tr>
             );
           })}
@@ -78,7 +79,7 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
       <h2>Areas of responsibility</h2>
       {event.aors.length === 0 && <p>None yet. Group areas under a lead so they can run their slice without asking.</p>}
       {event.aors.map((aor) => (
-        <section key={aor.id} style={{ borderLeft: `6px solid ${aor.color}`, paddingLeft: 8 }}>
+        <section key={aor.id} className="stripe" style={stripe(aor.color)}>
           <h3>{aor.name}{aor.radioChannel && <small> · radio {aor.radioChannel}</small>}</h3>
           <p>Areas: {event.areas.filter((a) => a.aorId === aor.id).map((a) => a.name).join(', ') || 'none yet'}</p>
           <ActionForm action={bind(setAorLead)}>
@@ -98,7 +99,12 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
         <ActionForm action={bind(addAor)}>
           <input type="hidden" name="eventId" value={event.id} />
           <label>Name <input name="name" required maxLength={80} placeholder="Front of house" /></label>
-          <label>Colour <input name="color" type="color" defaultValue="#4f46e5" /></label>
+          <fieldset>
+            <legend>Colour</legend>
+            <div className="swatches">
+              {AOR_COLORS.map(([name, hex], i) => <label key={hex} title={name}><input type="radio" name="color" value={hex} defaultChecked={i === event.aors.length % AOR_COLORS.length} aria-label={name} /><span style={stripe(hex)} /></label>)}
+            </div>
+          </fieldset>
           <label>Radio channel <input name="radioChannel" maxLength={20} /></label>
           <button type="submit">Add</button>
         </ActionForm>
@@ -114,15 +120,15 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
             <button type="submit">Move</button>
           </ActionForm>
           {area.positions.map((pos) => (
-            <div key={pos.id} style={{ marginLeft: 16 }}>
+            <div key={pos.id} className="card">
               <h4>{pos.name} <small>min {pos.minHeadcount}, target {pos.targetHeadcount}{pos.uniform && ` · wear ${pos.uniform}`}{pos.graceMin !== null && ` · grace ${pos.graceMin} min`}{pos.isFloat && ' · float pool'}</small></h4>
               {pos.brief && <p>{pos.brief}</p>}
-              <ul>
+              <ul className="plain">
                 {pos.shifts.map((s) => {
                   const c = count([s]);
                   return (
-                    <li key={s.id} style={{ color: tone(c) }}>
-                      {fmtDay(s.day.date, 'UTC')}: call {fmtTime(s.callAt, tz)}, {fmtTime(s.startAt, tz)} to {fmtTime(s.endAt, tz)} · {c.confirmed}/{s.needed} confirmed, {c.invited} invited · overbook {s.overbookPct}%
+                    <li key={s.id} className="row">
+                      <span className="grow">{fmtDay(s.day.date, 'UTC')}: call {fmtTime(s.callAt, tz)}, {fmtTime(s.startAt, tz)} to {fmtTime(s.endAt, tz)} · <strong data-tone={tone(c)}>{c.confirmed}/{s.needed} confirmed</strong>, {c.invited} invited · overbook {s.overbookPct}%</span>
                       <ActionForm action={bind(deleteShift)}>
                         <input type="hidden" name="id" value={s.id} />
                         <button type="submit" aria-label={`Delete shift ${fmtDay(s.day.date, 'UTC')} ${pos.name}`}>Delete</button>

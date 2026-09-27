@@ -45,7 +45,7 @@ export async function seedCallboard(slug = 'acme') {
     include: { days: true },
   });
   const foh = await db.aor.create({ data: { orgId, eventId: event.id, name: 'Front of house', color: '#2563eb', radioChannel: '2', leadId: people.get('Marcus Bell'), deputyId: people.get('Priya Nair') } });
-  const floor = await db.aor.create({ data: { orgId, eventId: event.id, name: 'Exhibit floor', color: '#16a34a', radioChannel: '3', leadId: people.get('Sofia Reyes') } });
+  const floor = await db.aor.create({ data: { orgId, eventId: event.id, name: 'Exhibit floor', color: '#059669', radioChannel: '3', leadId: people.get('Sofia Reyes') } });
   const plan = [
     { area: 'Registration', location: 'North Lobby', aor: foh.id, positions: [
       { name: 'Greeter', min: 2, target: 3, uniform: 'Black polo, name badge', brief: 'Welcome attendees, point them to the right badge line. If a VIP is not on the list, radio channel 2 for Marcus. Never leave the post without a swap.' },

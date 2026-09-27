@@ -14,7 +14,7 @@ export function ActionForm({ action, children }: { action: (form: FormData) => P
     <form action={submit}>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <fieldset disabled={pending} style={{ border: 0, margin: 0, padding: 0 }}>
+      <fieldset disabled={pending}>
         {children}
       </fieldset>
     </form>

@@ -45,7 +45,7 @@ export function Taps({ token }: { token: string }) {
         router.refresh();
       } catch {
         save([...load(), body]);
-        if (btn) btn.textContent = 'Queued';
+        if (btn) { btn.textContent = 'Queued, waiting for signal'; btn.dataset.queued = ''; }
         show();
       }
     };
@@ -55,5 +55,5 @@ export function Taps({ token }: { token: string }) {
     show();
     return () => { document.removeEventListener('submit', onSubmit); window.removeEventListener('online', flush); };
   }, [token, router]);
-  return <p id="tap-queue" aria-live="polite" />; // not role=status: the page's own one-time notices use that
+  return <p id="tap-queue" className="banner" aria-live="polite" />; // not role=status: the page's own one-time notices use that
 }

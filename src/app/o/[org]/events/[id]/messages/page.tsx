@@ -7,6 +7,7 @@ import { resolveAudience } from '@/lib/broadcast';
 import { MAX_ATTEMPTS } from '@/modules/notifications/outbox';
 import { fmtDay, fmtTime, fmtWhen } from '@/lib/time';
 import { resend, send } from './actions';
+import { Compose } from './compose';
 
 export const metadata = { title: 'Messages' };
 
@@ -50,19 +51,16 @@ export default async function Messages({ params, searchParams }: { params: Promi
 
   return (
     <main>
-      <p><Link href={base}>{event.name}</Link> · Messages · <Link href={`${base}/board`}>Board</Link></p>
+      <p className="crumbs"><Link href={base}>{event.name}</Link> <span>Messages</span> <Link href={`${base}/board`}>Board</Link></p>
       <h1>Message people: {event.name}</h1>
       {q.sent && <p role="status">Sent to {q.sent} {q.sent === '1' ? 'person' : 'people'}.</p>}
       {q.resent && <p role="status">Re-sent to {q.resent} who had not answered.</p>}
       <ActionForm action={bind(send)}>
         <input type="hidden" name="eventId" value={event.id} />
         <label>To <select name="audience" required>{options.map(([v, l, n]) => <option key={v} value={v} disabled={n === 0}>{l} ({n})</option>)}</select></label>
-        <br />
-        <label>Message <textarea name="body" rows={4} cols={70} maxLength={2000} required placeholder="Doors now 9:15, not 9:00." /></label>
-        <br />
-        <label><input type="checkbox" name="requiresAck" /> Ask for a one-tap “Got it”</label>
-        <p><small>Texts over 320 characters go out as one line plus a link to the full message on the person’s page.</small></p>
-        <button type="submit">Send</button>
+        <Compose />
+        <p><label><input type="checkbox" name="requiresAck" /> Ask for a one-tap “Got it”</label></p>
+        <button type="submit" className="primary">Send</button>
       </ActionForm>
 
       <h2>Sent</h2>
@@ -70,12 +68,12 @@ export default async function Messages({ params, searchParams }: { params: Promi
       {event.broadcasts.map((b) => {
         const acked = b.recipients.filter((r) => r.ackedAt).length;
         return (
-          <article key={b.id} style={{ border: '1px solid #ccc', padding: 8, marginBottom: 8 }}>
+          <article key={b.id}>
             <p><strong>{fmtWhen(b.createdAt, tz)}</strong> · to {b.audience} ({b.recipients.length}){b.requiresAck && ` · ${acked} of ${b.recipients.length} got it`}</p>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{b.body}</p>
+            <p className="pre">{b.body}</p>
             <details>
               <summary>Per person</summary>
-              <ul>{b.recipients.map((r) => <li key={r.id}>{r.person.name} · {status(r)}</li>)}</ul>
+              <ul className="plain">{b.recipients.map((r) => { const st = status(r); return <li key={r.id} className="row">{r.person.name} · <span className="pill" data-status={st.split(/[ :]/)[0]}>{st}</span></li>; })}</ul>
             </details>
             {b.requiresAck && acked < b.recipients.length && (
               <ActionForm action={bind(resend)}>

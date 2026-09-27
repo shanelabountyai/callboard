@@ -27,7 +27,7 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
 
   return (
     <main>
-      <p><Link href={base}>{event.name}</Link> · Run of show</p>
+      <p className="crumbs"><Link href={base}>{event.name}</Link> <span>Run of show</span></p>
       <h1>Run of show: {event.name}</h1>
       {q.imported && <p role="status">Imported {q.imported} rows. Hand-added lines were kept.</p>}
       {q.error && <p role="alert">{ERRORS[q.error] ?? 'Import failed.'}</p>}

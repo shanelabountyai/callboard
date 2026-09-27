@@ -36,7 +36,7 @@ async function stage() {
 
 describe('reminders', () => {
   it('T-7 nudges only the unconfirmed, once; T-1 sends the pack to the confirmed and a last nudge to the rest', async () => {
-    const { jen, tom } = await stage();
+    const { jen, tom, shift } = await stage();
     expect(await runReminders()).toEqual({ nudged: 1, packed: 0 }); // shift is 5 days out: inside T-7
     expect(await runReminders()).toEqual({ nudged: 0, packed: 0 }); // once
     await drainOutbox();
@@ -45,7 +45,9 @@ describe('reminders', () => {
     expect(t7[0]!.body).toContain('in a week');
     expect(t7[0]!.body).toMatch(/\/p\/[\w-]+/);
 
-    advanceClock(4 * 86_400_000 + 3_600_000); // now inside T-1
+    // Twelve hours before call time, measured from the shift: a fixed "4 days and an hour" only lands
+    // inside T-1 when the suite runs after 12:15 UTC, because the shift is pinned to a UTC day.
+    advanceClock(shift.callAt.getTime() - 12 * 3_600_000 - now().getTime());
     expect(await runReminders()).toEqual({ nudged: 1, packed: 1 });
     await drainOutbox();
     const all = await db.capturedMessage.findMany({ orderBy: { createdAt: 'asc' } });

@@ -22,11 +22,29 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 
 ## Backlog (in order)
 1. ~~Deploy phase 1+2~~ done 2026-09-26 (below). Still open: a Resend key so planners can sign in by email; 10DLC registration for volume.
-2. **Apply the design.** Run the design brief through Claude Design, then bring the result into the app: CSS custom
-   properties for the tokens (light + dark), the component set from the brief's Components table, and the screens in
-   the brief's order (person page first, lead roster, board, messages, plan, roster print). Replace the inline styles;
-   keep the ActionForm contract. Brief: https://claude.ai/code/artifact/7213f59c-5108-4cad-957d-d3615818380d
+2. ~~Apply the design~~ done 2026-09-26, built straight from the design brief (below).
 3. Phase 3 (PRD 6: position card library, reliability record, review).
+
+## Design pass 2026-09-26 (backlog 2)
+Built from the brief itself, not from a Claude Design export: the brief already fixes the tokens, the eight AoR
+hues, type, density and the component set, and an export would land as the same CSS custom properties. If an
+export arrives later, swap values in `src/app/globals.css`; nothing else needs to move.
+- `src/app/globals.css` holds every token (light + dark via `prefers-color-scheme`) and the component classes:
+  `.stripe` (reads `--aor`), `.pill[data-status]`, `.cov` + `[data-tone]`, `.badge`, `.alert[data-severity]`, `.row`,
+  `.banner` (offline queue), `.chips`, `.swatches`, `.sheet` (print), `main.floor` (48px targets). Element defaults
+  style tables, forms and buttons, so foundation screens (login, members, billing) picked it up with no markup change.
+- No inline styles remain in `src/`. ActionForm contract unchanged.
+- Decisions: amber and green are darkened for text (`#b45309`, `#15803d`) because the brief's `#d97706` and `#16a34a`
+  fail 4.5:1 on white; AoR green is `#059669` so it never equals status green; AoR colour is now a swatch radio
+  validated against `AOR_HEX` in `src/lib/colors.ts` (existing rows keep whatever hex they hold); help categories are
+  chips in the brief's order with Supplies pre-picked (the old select defaulted to Medical).
+- Also fixed on the way: the reminders test only passed after 12:15 UTC (its clock advance is now relative to the
+  shift); `seed-demo` now renames an existing org, because a test run can leave `acme` named by its slug and the
+  e2e sign-in looks for "Acme Studio".
+- Not done from the brief (add when asked): PWA manifest and installed icon, a manual dark/light toggle, the
+  clickable prototypes and copy deck that only Claude Design would produce, coverage board as a time-block grid
+  (it is still one row per shift).
+- DesignSync needs `/design-login` run once from an interactive session before any session can read Claude Design.
 
 ## Deployed 2026-09-26: https://callboard-ten.vercel.app
 Vercel project `callboard` (team shanelabountyai-8212s-projects), Root Directory ".", git-connected to main.

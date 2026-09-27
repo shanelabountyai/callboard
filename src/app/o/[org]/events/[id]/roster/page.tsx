@@ -40,17 +40,17 @@ export default async function Roster({ params, searchParams }: { params: Promise
 
   return (
     <main>
-      <style>{`@media print { .no-print { display: none } section { page-break-after: always } } .qr svg { width: 120px; height: 120px }`}</style>
-      <p className="no-print">
-        <Link href={base}>{event.name}</Link> · Roster · Day: {event.days.map((d) => <Link key={d.id} href={`${base}/roster?day=${ymd(d.date)}`} style={{ marginRight: 8, fontWeight: d.id === day?.id ? 'bold' : undefined }}>{fmtDay(d.date, 'UTC')}</Link>)}
-        · Use your browser’s Print.
+      <p className="crumbs no-print">
+        <Link href={base}>{event.name}</Link> <span>Roster</span> <span>Day:</span>
+        {event.days.map((d) => <Link key={d.id} href={`${base}/roster?day=${ymd(d.date)}`} aria-current={d.id === day?.id ? 'page' : undefined}>{d.id === day?.id ? <strong>{fmtDay(d.date, 'UTC')}</strong> : fmtDay(d.date, 'UTC')}</Link>)}
+        <span>Use your browser’s Print.</span>
       </p>
       {await Promise.all(groups.map(async ({ aor, areas }) => (
-        <section key={aor?.id ?? 'planner'}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <section key={aor?.id ?? 'planner'} className="sheet card">
+          <div className="head">
             <div>
-              <h1 style={{ marginBottom: 0 }}>{event.name}{day && ` · ${fmtDay(day.date, 'UTC')}`}</h1>
-              <h2 style={{ marginTop: 4 }}>{aor?.name ?? 'Ungrouped (planner)'}{aor?.radioChannel && ` · radio ${aor.radioChannel}`}</h2>
+              <h1>{event.name}{day && ` · ${fmtDay(day.date, 'UTC')}`}</h1>
+              <h2>{aor?.name ?? 'Ungrouped (planner)'}{aor?.radioChannel && ` · radio ${aor.radioChannel}`}</h2>
               {aor && <p>Lead: {aor.lead ? `${aor.lead.name} ${aor.lead.mobile}` : 'unset'} · Deputy: {aor.deputy ? `${aor.deputy.name} ${aor.deputy.mobile}` : 'none'}</p>}
               {event.emergencyContact && <p>Emergency: {event.emergencyContact}</p>}
             </div>
@@ -60,20 +60,20 @@ export default async function Roster({ params, searchParams }: { params: Promise
             <div key={area.id}>
               <h3>{area.name}{area.location && ` · ${area.location}`}</h3>
               {area.positions.flatMap((pos) => pos.shifts.filter((s) => !day || s.dayId === day.id).map((s) => (
-                <table key={s.id} style={{ borderCollapse: 'collapse', width: '100%', marginBottom: 12 }}>
+                <table key={s.id}>
+                  <caption>{pos.name} · call {fmtTime(s.callAt, tz)} · {fmtTime(s.startAt, tz)} to {fmtTime(s.endAt, tz)} · {s.assignments.length} of {s.needed}</caption>
                   <thead>
-                    <tr><th colSpan={4} style={{ textAlign: 'left' }}>{pos.name} · call {fmtTime(s.callAt, tz)} · {fmtTime(s.startAt, tz)} to {fmtTime(s.endAt, tz)} · {s.assignments.length} of {s.needed}</th></tr>
-                    <tr><th style={{ textAlign: 'left' }}>Name</th><th style={{ textAlign: 'left' }}>Mobile</th><th style={{ width: 80 }}>In</th><th style={{ width: 80 }}>Out</th></tr>
+                    <tr><th>Name</th><th>Mobile</th><th className="tick">In</th><th className="tick">Out</th></tr>
                   </thead>
                   <tbody>
                     {s.assignments.map((a) => (
-                      <tr key={a.id} style={{ height: 32 }}>
-                        <td style={{ borderBottom: '1px solid #999' }}>{a.person.name}</td><td style={{ borderBottom: '1px solid #999' }}>{a.person.mobile}</td>
-                        <td style={{ border: '1px solid #999' }} /><td style={{ border: '1px solid #999' }} />
+                      <tr key={a.id}>
+                        <td>{a.person.name}</td><td>{a.person.mobile}</td>
+                        <td className="tick" /><td className="tick" />
                       </tr>
                     ))}
                     {Array.from({ length: Math.max(0, s.needed - s.assignments.length) + 1 }).map((_, i) => (
-                      <tr key={`blank-${i}`} style={{ height: 32 }}><td style={{ borderBottom: '1px solid #999' }} /><td style={{ borderBottom: '1px solid #999' }} /><td style={{ border: '1px solid #999' }} /><td style={{ border: '1px solid #999' }} /></tr>
+                      <tr key={`blank-${i}`}><td /><td /><td className="tick" /><td className="tick" /></tr>
                     ))}
                   </tbody>
                 </table>

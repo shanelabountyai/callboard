@@ -1,0 +1,200 @@
+/* Callboard design tokens and the whole component set (design brief, 2026-09-26).
+   A stage-door callboard: off-white paper, white cards with a hairline, no shadows, no gradients.
+   Three status colours carry meaning and nothing else uses them; AoR hues appear only as the stripe. */
+:root {
+  color-scheme: light dark;
+  --bg: #faf9f6;
+  --surface: #ffffff;
+  --ink: #1c1917;
+  --muted: #57534e;
+  --line: #d6d3d1;
+  --soft: #f5f5f4;
+  --red: #dc2626;        /* below minimum, overdue, open alert */
+  --amber: #b45309;      /* at minimum, under target: #d97706 darkened until text passes 4.5:1 */
+  --green: #15803d;      /* at target: the quiet state */
+  --focus: #2563eb;
+  --radius: 6px;
+  --tap: 44px;           /* planner rows and controls */
+  --tap-floor: 48px;     /* floor screens: one thumb, outdoors */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1917;
+    --surface: #292524;
+    --ink: #f5f5f4;
+    --muted: #a8a29e;
+    --line: #44403c;
+    --soft: #33302d;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --green: #4ade80;
+    --focus: #93c5fd;
+  }
+}
+
+/* Base */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 16px; }
+main.floor { max-width: 40rem; }
+h1 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 8px; }
+h2 { font-size: 1.2rem; margin: 24px 0 8px; }
+h3 { font-size: 1.05rem; margin: 16px 0 6px; }
+h4 { font-size: 1rem; margin: 12px 0 4px; }
+p { margin: 0 0 8px; }
+a { color: inherit; text-underline-offset: 2px; }
+small, .muted { color: var(--muted); font-size: 0.9rem; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+[role="alert"] { color: var(--red); font-weight: 600; }
+[role="status"] { color: var(--green); font-weight: 600; }
+.pre { white-space: pre-wrap; }
+
+/* Top bar (planner) */
+.topbar {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center;
+  padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.topbar strong { margin-right: 8px; }
+.topbar a { text-decoration: none; padding: 8px 0; }
+.topbar a:hover { text-decoration: underline; }
+.crumbs { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px; color: var(--muted); }
+
+/* Cards: anything that belongs to an AoR carries its stripe on the left edge, like tape on a board */
+article, .card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px; margin-bottom: 12px;
+}
+.stripe { border-left: 6px solid var(--aor, var(--line)); }
+section.stripe { padding-left: 12px; margin-bottom: 20px; }
+article > :first-child, .card > :first-child { margin-top: 0; }
+article > :last-child, .card > :last-child { margin-bottom: 0; }
+
+/* Controls: 44px on planner screens, 48px on the floor */
+button, input, select, textarea {
+  font: inherit; color: inherit; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; min-height: var(--tap);
+}
+input[type="checkbox"], input[type="radio"] { min-height: 0; width: 20px; height: 20px; margin: 0 6px 0 0; vertical-align: middle; accent-color: var(--ink); }
+input[type="color"] { padding: 2px; width: var(--tap); }
+textarea { width: 100%; max-width: 40rem; resize: vertical; }
+button { cursor: pointer; font-weight: 600; background: var(--soft); }
+button:hover:not(:disabled) { background: var(--line); }
+button:disabled { opacity: 0.55; cursor: default; }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+button.primary:hover:not(:disabled) { opacity: 0.9; background: var(--ink); }
+.floor button, .floor select, .floor input:not([type="checkbox"]):not([type="radio"]) { min-height: var(--tap-floor); font-size: 1.125rem; }
+.floor input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]) { width: 100%; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+form { margin-bottom: 8px; }
+label { display: inline-block; margin: 0 12px 8px 0; }
+label:has(> input:not([type="checkbox"]):not([type="radio"])), label:has(> select), label:has(> textarea) {
+  display: inline-flex; flex-direction: column; gap: 4px; vertical-align: bottom;
+}
+label:has(> textarea) { width: 100%; }
+.pair { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pair form { margin: 0; }
+details { margin: 8px 0; }
+summary { cursor: pointer; min-height: var(--tap); display: flex; align-items: center; gap: 6px; font-weight: 600; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "▸"; color: var(--muted); }
+details[open] > summary::before { content: "▾"; }
+.floor summary { min-height: var(--tap-floor); }
+
+/* Tables: dense, generous rows */
+table { width: 100%; border-collapse: collapse; margin-bottom: 12px; background: var(--surface); }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:has(details[open]) > td { vertical-align: top; }
+td details { margin: 0; }
+caption { text-align: left; font-weight: 600; padding: 8px 0 4px; }
+tr { min-height: var(--tap); }
+th { font-weight: 600; color: var(--muted); font-size: 0.9rem; }
+tr.live { background: var(--soft); }
+td form { margin: 0; }
+ul.plain { list-style: none; padding: 0; margin: 0; }
+
+/* Coverage cell: the number read from across the room */
+.cov { font-weight: 700; font-size: 1.25rem; }
+[data-tone="red"] { color: var(--red); }
+[data-tone="amber"] { color: var(--amber); }
+[data-tone="green"] { color: var(--green); }
+.call { font-weight: 700; font-size: 1.125rem; }
+
+/* Status pill: text plus colour, never colour alone */
+.pill {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.85rem; font-weight: 600;
+  border: 1px solid var(--line); background: var(--soft); white-space: nowrap;
+}
+.pill[data-status="confirmed"], .pill[data-status="acked"], .pill[data-status="here"], .pill[data-status="delivered"] { color: var(--green); border-color: currentColor; background: transparent; }
+.pill[data-status="invited"], .pill[data-status="queued"], .pill[data-status="retrying"], .pill[data-status="sent"] { color: var(--amber); border-color: currentColor; background: transparent; }
+.pill[data-status="overdue"], .pill[data-status="failed"] { color: var(--red); border-color: currentColor; background: transparent; }
+.pill[data-status="declined"], .pill[data-status="released"], .pill[data-status="done"], .pill[data-status="no"] { color: var(--muted); }
+
+/* Badge: a red count on a neutral row, so ten overdue rows never become a red wall */
+.badge {
+  display: inline-block; min-width: 1.5em; padding: 0 6px; border-radius: 999px; text-align: center;
+  font-size: 0.85rem; font-weight: 700; color: #fff; background: var(--red);
+}
+.badge[data-tone="amber"] { background: var(--amber); }
+
+/* Alert card */
+.alert { border-width: 2px; border-color: var(--amber); }
+.alert[data-severity="high"] { border-color: var(--red); }
+.alert.pair { justify-content: space-between; }
+.alert .grow { flex: 1 1 16rem; }
+
+/* Person row (lead view, board detail) */
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 56px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row .grow { flex: 1 1 12rem; }
+.row form { margin: 0; }
+
+/* Offline banner: neutral and persistent; it is not a problem */
+.banner:empty { display: none; }
+.banner { background: var(--soft); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; }
+.banner::before { content: "◷ "; }
+button[data-queued] { color: var(--muted); }
+
+/* Chips: a closed set as a radio group */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.chips label { margin: 0; }
+.chips input { position: absolute; opacity: 0; width: 0; height: 0; }
+.chips span {
+  display: inline-flex; align-items: center; min-height: var(--tap); padding: 8px 14px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); cursor: pointer;
+}
+.floor .chips span { min-height: var(--tap-floor); }
+.chips label:has(:checked) span { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chips label:has(:focus-visible) span { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* AoR swatches: eight fixed hues, never a free colour input */
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.swatches label { margin: 0; }
+.swatches input { position: absolute; opacity: 0; width: 0; height: 0; }
+.swatches span { display: block; width: 32px; height: 32px; border-radius: 50%; background: var(--aor); border: 3px solid transparent; cursor: pointer; }
+.swatches label:has(:checked) span { border-color: var(--ink); box-shadow: inset 0 0 0 2px var(--surface); }
+.swatches label:has(:focus-visible) span { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Print sheet: one AoR per page, black and white */
+.sheet .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.sheet .qr svg { width: 120px; height: 120px; }
+.sheet table { table-layout: fixed; }
+.sheet td { height: 32px; }
+.sheet .tick { width: 80px; border: 1px solid #999; }
+@media print {
+  body { background: #fff; color: #000; font-size: 12pt; }
+  main { max-width: none; padding: 0; }
+  .no-print, .topbar { display: none; }
+  .sheet { page-break-after: always; border: 0; padding: 0; }
+  th, td { border-color: #999; }
+  a { text-decoration: none; }
+}
+
+/* Invite picker: the directory in columns, one name per line */
+.columns { columns: 16rem 3; margin-bottom: 8px; }
+.columns label { display: block; margin: 0; padding: 6px 0; break-inside: avoid; }

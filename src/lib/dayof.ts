@@ -55,7 +55,8 @@ export async function checkOut(tx: Tx, a: FullAssignment, at: Date, method: Meth
   return count ? 'recorded' : 'kept';
 }
 
-const SEVERITY: Record<string, number> = { medical: 3, security: 3, vip: 2, relief: 2, supplies: 1, other: 1 };
+// Key order is the order the help sheet shows its chips; the first is pre-picked, so it is the mildest.
+const SEVERITY: Record<string, number> = { supplies: 1, vip: 2, relief: 2, medical: 3, security: 3, other: 1 };
 export const HELP_CATEGORIES = Object.keys(SEVERITY);
 
 /** A help request from the floor: an alert to the lead with the person's position and area attached. */
