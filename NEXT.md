@@ -1,22 +1,20 @@
 # NEXT
 
-## ⚠ CI is red by decision until the foundation ships "required modules" (decided 2026-09-28)
-CI red since 2026-09-26. The `ci` job passes; only `modules-removed` (`npm run foundation:check-modules`) fails `tsc`. It is the
-template's release check that both modules can be deleted, and Callboard sends every text through the notifications outbox
-(`src/lib/messages.ts`, `src/lib/broadcast.ts`, `src/app/api/sms/inbound/route.ts`, the event actions), so it cannot hold here.
-- **Decision (Shane, 2026-09-28): fix it upstream first.** Not taken: narrowing `MODULES` in `scripts/foundation-modules.ts` here
-  (a local patch to carry at every upgrade), and dropping the job from `ci.yml` (loses the billing half of the check).
-- **Request for saas-foundation (filed 2026-09-28 as F-03 in its `BACKLOG.md`, with a pointer at the top of its `NEXT.md`;
-  both left uncommitted there for its own session to commit):** a clone declares a module required in a clone-owned file, the way `cron-jobs.ts` and
-  `org-hooks.ts` are clone-owned. `foundation:check-modules` leaves a required module in place and still removes the rest.
-  Done when Callboard, with notifications required, passes `check-modules` with billing removed.
-- Not verified: that billing alone removes cleanly from Callboard. The errors read from the failed run were all notifications.
-- **Every item until then:** run `gh run list --limit 3` before starting and after pushing, and read the jobs
+## ⚠ CI is red until backlog 7 lands on main (updated 2026-09-28)
+Only `modules-removed` fails; the `ci` job passes. Callboard sends every text through the notifications outbox, so the
+template's check that both modules can be deleted cannot hold here.
+- **Decision (Shane, 2026-09-28): fix it upstream.** Done the same day: foundation `v1.2.0` (F-03, `919edc0`) adds the
+  clone-owned `src/app/required-modules.ts`, and `foundation:check-modules` leaves a module named there in place.
+- **The fix here is part of backlog 7:** after merging `v1.2.0`, set `REQUIRED_MODULES` to `['notifications']`, then run
+  `npm run foundation:check-modules` once. The foundation proved it in the template only. Whether billing alone removes
+  cleanly from Callboard has never been run.
+- **Every item:** run `gh run list --limit 3` before starting and after pushing, and read the jobs
   (`gh run view <id> --json jobs`). A red `ci` job is the item, ahead of the queue. A red `modules-removed` alone is not.
 - CI runs on main and on pull requests only, so a push to a stacked branch starts no run.
-- Delete this block once that release is merged here and CI is green.
+- Delete this block once CI is green on main.
 
-> **Pick up here: backlog 7, the foundation upgrade to `v1.1.0` (FR-06..11) and `v1.1.1` (6 LOWs, `security:`).** v1.1.0 was
+> **Pick up here: backlog 7, the foundation upgrade to `v1.1.0` (FR-06..11), `v1.1.1` (6 LOWs, `security:`) and `v1.2.0`
+> (F-03, required modules).** All three tags are fetched locally. v1.1.0 was
 > published by midday 2026-09-28 (`d422d1a`); v1.1.1 followed the same day (`a121708`) — stale sign-in links, TOTP concurrent
 > double-issue, IPv6 rate-limit /64 scoping, orphaned share links, non-atomic audit writes. `security:` releases are due
 > within 7 days — **v1.1.1 is due 2026-10-05.** Branch from `phase-3-slice-2`. The `template` remote is SSH and fails host
@@ -51,7 +49,7 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 4. ~~Foundation upgrade to v1.0.2~~ merged 2026-09-28 on branch `foundation-v1.0.2`, stacked on `phase-3` (below). **Not on main: see "Ship phase 3".**
 5. ~~Foundation upgrade to v1.0.3~~ merged 2026-09-28 on branch `foundation-v1.0.3`, stacked on `foundation-v1.0.2` (below). **Not on main: see "Ship phase 3".**
 6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. **Not on main: see "Ship phase 3".**
-7. Foundation upgrade to v1.1.0 (FR-06..11) and v1.1.1 (6 LOWs, `security:`, due 2026-10-05). Both published 2026-09-28. Both tags are fetched locally. Do not wait for the "required modules" release: the security date comes first, and that release is its own upgrade.
+7. Foundation upgrade to v1.1.0 (FR-06..11), v1.1.1 (6 LOWs, `security:`, due 2026-10-05) and v1.2.0 (F-03). All published 2026-09-28. Then `REQUIRED_MODULES = ['notifications']` and one run of `foundation:check-modules`.
 8. PRD 3 swaps: a person proposes a swap with a named colleague, both accept, the lead approves, the two assignments change hands in one transaction. Opus-class item: it adds writes to the no-login person page.
 9. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
