@@ -1,7 +1,7 @@
 # NEXT
 
-> **Pick up here: merge `availability` to main when Shane says go** (PR open, no migration; below). After that nothing is
-> queued. Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
+> **Pick up here: nothing is queued.** Availability and the Preview switch-off shipped to main and production on 2026-09-28
+> (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
 > Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
 > await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
 > `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`, on main.
@@ -36,7 +36,7 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. On main 2026-09-28.
 7. ~~Foundation upgrade to v1.1.0, v1.1.1 and v1.2.0~~ merged 2026-09-28 on branch `foundation-v1.2.0`, stacked on `phase-3-slice-2` (below). On main 2026-09-28.
 8. ~~PRD 3 swaps~~ built 2026-09-28 on branch `prd3-swaps`, stacked on `foundation-v1.2.0` (below). On main 2026-09-28.
-9. ~~Availability and Preview builds~~ built 2026-09-28 on branch `availability` (below). Not on main yet.
+9. ~~Availability and Preview builds~~ built 2026-09-28 on branch `availability` (below). On main 2026-09-28, PR #1.
 10. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
