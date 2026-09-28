@@ -101,6 +101,7 @@ model Event {
   broadcasts    Broadcast[]
   reviews       Review[]
   areaReviews   AreaReview[]
+  swaps         Swap[]
 
   @@index([orgId, createdAt])
 }
@@ -224,6 +225,8 @@ model Assignment {
   createdAt     DateTime         @default(now()) @db.Timestamptz(6)
   alerts        Alert[]
   review        Review?
+  swapsAsked    Swap[]           @relation("SwapFrom")
+  swapsOffered  Swap[]           @relation("SwapTo")
 
   @@unique([shiftId, personId])
   @@index([personId])
@@ -429,4 +432,38 @@ model OrgRules {
   moves         String   @default("")
   thanks        String   @default("")
   updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+}
+
+enum SwapStatus {
+  proposed // the asker has offered; waiting on the colleague
+  accepted // both agree; waiting on the lead
+  approved // done: the two assignments changed shifts
+  declined // the colleague said no
+  refused // the lead or planner said no
+  cancelled // the asker withdrew, or a shift changed under it
+}
+
+// A swap (PRD 3): one person offers their shift for a named colleague's. Approval moves each assignment
+// to the other's shift, so everything that belongs to the person (answers, alerts) stays with the person.
+model Swap {
+  id          String     @id @default(uuid()) @db.Uuid
+  orgId       String     @db.Uuid
+  org         Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId     String     @db.Uuid
+  event       Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fromId      String     @db.Uuid // the asker's assignment
+  from        Assignment @relation("SwapFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId        String     @db.Uuid // the colleague's
+  to          Assignment @relation("SwapTo", fields: [toId], references: [id], onDelete: Cascade)
+  fromShiftId String     @db.Uuid // the shifts as offered: approval exchanges exactly these or nothing
+  toShiftId   String     @db.Uuid
+  status      SwapStatus @default(proposed)
+  decidedBy   String     @default("") // who approved or refused, by name
+  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
+  answeredAt  DateTime?  @db.Timestamptz(6)
+  decidedAt   DateTime?  @db.Timestamptz(6)
+
+  @@index([eventId, status])
+  @@index([fromId])
+  @@index([toId])
 }

@@ -102,6 +102,7 @@ model Org {
   reviews        Review[] // app
   areaReviews    AreaReview[] // app
   playbooks      Playbook[] // app
+  swaps          Swap[] // app
   orgRules       OrgRules? // app
 }
 

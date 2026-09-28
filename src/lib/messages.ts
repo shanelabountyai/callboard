@@ -61,6 +61,27 @@ Object.assign(templates, {
     subject: `${s(d.event)}: thank you`,
     body: `${s(d.text)} Want to work the next one? Tap to be counted in: ${s(d.url)}`,
   }),
+  // Swaps (PRD 3). The person's own shift is `position` and `when`; the other side is `other*`.
+  cb_swap_ask: (d) => ({
+    subject: `${s(d.event)}: ${s(d.other)} asks to swap shifts`,
+    body: `${s(d.name)}, ${s(d.other)} asks to swap shifts at ${s(d.event)}: you would take ${s(d.otherPosition)}, ${s(d.otherWhen)}; they take your ${s(d.position)}, ${s(d.when)}. Accept or decline: ${s(d.url)}`,
+  }),
+  cb_swap_accepted: (d) => ({
+    subject: `${s(d.event)}: ${s(d.other)} accepted your swap`,
+    body: `${s(d.name)}, ${s(d.other)} accepted your swap at ${s(d.event)}. It now waits on your lead. Your ${s(d.position)} shift on ${s(d.when)} is still yours until they approve: ${s(d.url)}`,
+  }),
+  cb_swap_approve: (d) => ({
+    subject: `${s(d.event)}: a swap to approve`,
+    body: `${s(d.to)}: ${s(d.a)} and ${s(d.b)} want to swap at ${s(d.event)}. ${s(d.a)} would take ${s(d.aTakes)}; ${s(d.b)} would take ${s(d.bTakes)}.${d.url ? ` Approve or refuse: ${s(d.url)}` : ' Approve or refuse on the Staff page.'}`,
+  }),
+  cb_swap_done: (d) => ({
+    subject: `${s(d.event)}: your swap is approved`,
+    body: `${s(d.name)}, your swap with ${s(d.other)} at ${s(d.event)} is approved. You now have ${s(d.position)} (${s(d.area)}), ${s(d.when)}. Call time ${s(d.call)}. Lead: ${s(d.lead)}. Details: ${s(d.url)}`,
+  }),
+  cb_swap_off: (d) => ({
+    subject: `${s(d.event)}: the swap is off`,
+    body: `${s(d.name)}, the swap with ${s(d.other)} at ${s(d.event)} is off (${s(d.why)}). Your ${s(d.position)} shift on ${s(d.when)} stays as it was: ${s(d.url)}`,
+  }),
   // A planner's message (PRD 4). Over 320 characters it becomes a pointer to the page, where the full text waits.
   cb_broadcast: (d) => {
     const ack = d.requiresAck ? ` Got it? Reply GOT IT or tap ${s(d.url)}` : '';

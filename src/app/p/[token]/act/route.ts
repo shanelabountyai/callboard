@@ -9,14 +9,18 @@ import { readPersonLink } from '@/lib/links';
 import { ensurePersonLink } from '@/lib/links';
 import { notify } from '@/lib/messages';
 import { assignmentInclude, describeAssignment, linkExpiry } from '@/lib/staffing';
+import { answerSwap, askSwap, decideSwap, SWAP_SAYS, swapDone, withdrawSwap } from '@/lib/swaps';
 import { drainOutbox } from '@/modules/notifications/outbox';
 
 // Every day-of action from a person's or lead's page (PRD 5): check in or out (own shift, or anyone in
-// an AoR you lead), ask for help, acknowledge a message, resolve or release a no-show. A POST, same
+// an AoR you lead), ask for help, acknowledge a message, resolve or release a no-show. And before the
+// day, a swap (PRD 3): ask, answer, withdraw, and a lead's approval. A POST, same
 // origin, from the link's own page; JSON from taps.tsx or a plain form without JavaScript.
 const Body = z.object({
-  kind: z.enum(['checkin', 'checkout', 'help', 'ack', 'resolve', 'release', 'back']),
+  kind: z.enum(['checkin', 'checkout', 'help', 'ack', 'resolve', 'release', 'back', 'swap_ask', 'swap_yes', 'swap_no', 'swap_withdraw', 'swap_approve', 'swap_refuse']),
   assignment: z.uuid().optional(),
+  other: z.uuid().optional(), // swap_ask: the colleague's assignment
+  swap: z.uuid().optional(),
   alert: z.uuid().optional(),
   recipient: z.uuid().optional(),
   category: z.string().max(20).optional(),
@@ -65,6 +69,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     await db.$transaction((tx) => raiseHelp(tx, { ...person, orgId }, event.id, a, category, i.note ?? ''));
     await drainOutbox(5);
     return reply(200, undefined, 'help');
+  }
+
+  if (i.kind.startsWith('swap_')) {
+    const scope = { orgId, eventId: event.id };
+    if (i.kind === 'swap_ask' ? !i.assignment || !i.other : !i.swap) return reply(400, 'Which swap?');
+    const r =
+      i.kind === 'swap_ask' ? await askSwap(person, scope, i.assignment!, i.other!)
+      : i.kind === 'swap_withdraw' ? await withdrawSwap(person, scope, i.swap!)
+      : i.kind === 'swap_yes' || i.kind === 'swap_no' ? await answerSwap(person, scope, i.swap!, i.kind === 'swap_yes')
+      : await decideSwap({ name: person.name, personId: person.id, aorIds: myAors.map((x) => x.id) }, { orgId, userId: null }, scope, i.swap!, i.kind === 'swap_approve');
+    await drainOutbox(5);
+    return swapDone(r) ? reply(200, undefined, r) : reply(409, SWAP_SAYS[r], r);
   }
 
   // "Count me in next time" on the thank-you (PRD 6): about the person, not the event, so it outlives this link.

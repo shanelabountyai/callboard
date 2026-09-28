@@ -243,3 +243,59 @@ test('the library: a rule change marks what deviates, a template starts an event
   await expect(page.getByText(/Provisional: \d of \d areas have no review yet/)).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'volunteer' })).toBeVisible();
 });
+
+// PRD 3 swaps, on day two (three weeks out, so nothing here depends on the clock): Tom offers his Greeter shift
+// for Jen's Info shift, Jen accepts, the planner sees it waiting on the lead, Marcus approves, and both have moved.
+test('swap: a person asks, the colleague accepts, the lead approves, and the two shifts change hands', async ({ page, context }) => {
+  await db.query(`UPDATE "Event" SET status = 'confirmed' WHERE name = 'Spring Expo'`); // an earlier test closed it
+  const { rows: [event] } = await db.query(`SELECT id, "orgId" FROM "Event" WHERE name = 'Spring Expo'`);
+  const person = async (mobile: string) => (await db.query(`SELECT id FROM "Person" WHERE mobile = $1 AND "orgId" = $2`, [mobile, event.orgId])).rows[0].id as string;
+  const [tom, jen, marcus] = [await person('+15550100006'), await person('+15550100003'), await person('+15550100001')];
+  const shift = async (position: string) => (await db.query(
+    `SELECT s.id FROM "Shift" s JOIN "Position" p ON p.id = s."positionId" JOIN "EventDay" d ON d.id = s."dayId"
+     WHERE s."eventId" = $1 AND p.name = $2 AND d.date = (SELECT max(date) FROM "EventDay" WHERE "eventId" = $1) ORDER BY s."startAt" LIMIT 1`, [event.id, position])).rows[0].id as string;
+  const [greeter, info] = [await shift('Greeter'), await shift('Info')];
+  await db.query(`DELETE FROM "Assignment" a USING "Shift" s, "EventDay" d WHERE a."shiftId" = s.id AND s."dayId" = d.id AND a."eventId" = $1 AND a."personId" = ANY($2) AND d.date = (SELECT max(date) FROM "EventDay" WHERE "eventId" = $1)`, [event.id, [tom, jen]]);
+  const put = async (shiftId: string, personId: string) => (await db.query(
+    `INSERT INTO "Assignment" (id, "orgId", "eventId", "shiftId", "personId", status) VALUES (gen_random_uuid(), $1, $2, $3, $4, 'confirmed') RETURNING id`, [event.orgId, event.id, shiftId, personId])).rows[0].id as string;
+  const [tomsShift, jensShift] = [await put(greeter, tom), await put(info, jen)];
+  const { ensurePersonLink } = await import('../src/lib/links');
+  const { db: prisma } = await import('../src/core/db');
+  const url = (personId: string) => ensurePersonLink(prisma, { orgId: event.orgId, eventId: event.id, personId }, new Date(Date.now() + 30 * 86_400_000));
+  const open = async (personId: string) => {
+    const phone = await (await context.browser()!.newContext()).newPage();
+    await phone.goto(await url(personId));
+    await expect(phone.getByRole('heading', { name: 'Spring Expo' })).toBeVisible();
+    return phone;
+  };
+
+  const tomsPhone = await open(tom);
+  await tomsPhone.getByText('Swap this shift').click();
+  await tomsPhone.getByLabel('Swap with').selectOption(jensShift);
+  await tomsPhone.getByRole('button', { name: 'Ask to swap' }).click();
+  await expect(tomsPhone.getByRole('status')).toContainText('Asked.');
+  await expect(tomsPhone.getByText('Waiting on Jen')).toBeVisible();
+
+  const jensPhone = await open(jen);
+  await expect(jensPhone.getByText('Tom Alvarez asks to swap shifts.')).toBeVisible();
+  await jensPhone.getByRole('button', { name: 'Accept' }).click();
+  await expect(jensPhone.getByRole('status')).toContainText('Accepted.');
+
+  await signInAsAcmeOwner(page);
+  await page.getByRole('link', { name: 'Staff this event' }).click();
+  await expect(page.getByRole('heading', { name: 'Staff: Spring Expo' })).toBeVisible();
+  await expect(page.getByText('both agreed, waiting on Marcus Bell')).toBeVisible();
+
+  const leadsPhone = await open(marcus);
+  await expect(leadsPhone.getByRole('heading', { name: 'Swaps to approve' })).toBeVisible();
+  await leadsPhone.getByRole('button', { name: 'Approve' }).click();
+  await expect(leadsPhone.getByRole('status')).toContainText('Approved.');
+  await expect(leadsPhone.getByRole('heading', { name: 'Swaps to approve' })).toHaveCount(0);
+
+  const { rows } = await db.query(`SELECT id, "shiftId" FROM "Assignment" WHERE id = ANY($1)`, [[tomsShift, jensShift]]);
+  expect(Object.fromEntries(rows.map((r) => [r.id, r.shiftId]))).toEqual({ [tomsShift]: info, [jensShift]: greeter });
+  await tomsPhone.reload();
+  await expect(tomsPhone.locator('article').filter({ hasText: 'Info · Info Desk' })).toBeVisible();
+  const { rows: [text] } = await db.query(`SELECT body FROM "CapturedMessage" WHERE "to" = '+15550100006' ORDER BY "createdAt" DESC LIMIT 1`);
+  expect(text.body).toContain('is approved. You now have Info');
+});

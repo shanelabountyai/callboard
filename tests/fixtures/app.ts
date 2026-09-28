@@ -9,7 +9,7 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
   const ID = (k: number) => `00000000-0000-4000-8000-${String(n + k).padStart(12, '0')}`;
   const orgId = org.orgId;
   const t = now();
-  const ids = { person: ID(1), event: ID(2), eventDay: ID(3), aor: ID(4), area: ID(5), position: ID(6), shift: ID(7), assignment: ID(8), runOfShowRow: ID(10), alert: ID(11), broadcast: ID(12), positionCard: ID(13), playbook: ID(14) };
+  const ids = { person: ID(1), event: ID(2), eventDay: ID(3), aor: ID(4), area: ID(5), position: ID(6), shift: ID(7), assignment: ID(8), runOfShowRow: ID(10), alert: ID(11), broadcast: ID(12), positionCard: ID(13), playbook: ID(14), swap: ID(15) };
   const lead = ID(9);
   await db.person.create({ data: { id: ids.person, orgId, name: `Person ${key}`, mobile: `+1555000${n}`, kind: 'volunteer' } });
   await db.person.create({ data: { id: lead, orgId, name: `Lead ${key}`, mobile: `+1555001${n}`, kind: 'employee' } });
@@ -27,6 +27,11 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
     data: { id: ids.shift, orgId, eventId: ids.event, positionId: ids.position, dayId: ids.eventDay, callAt: new Date(startAt.getTime() - 45 * 60_000), startAt, endAt: new Date(startAt.getTime() + 4 * 3_600_000), needed: 2 },
   });
   await db.assignment.create({ data: { id: ids.assignment, orgId, eventId: ids.event, shiftId: ids.shift, personId: ids.person } });
+  // A swap both have agreed to: the lead's later shift for the person's.
+  const later = { callAt: new Date(startAt.getTime() + 5 * 3_600_000), startAt: new Date(startAt.getTime() + 6 * 3_600_000), endAt: new Date(startAt.getTime() + 9 * 3_600_000) };
+  await db.shift.create({ data: { id: ID(16), orgId, eventId: ids.event, positionId: ids.position, dayId: ids.eventDay, ...later, needed: 1 } });
+  await db.assignment.create({ data: { id: ID(17), orgId, eventId: ids.event, shiftId: ID(16), personId: lead } });
+  await db.swap.create({ data: { id: ids.swap, orgId, eventId: ids.event, fromId: ids.assignment, toId: ID(17), fromShiftId: ids.shift, toShiftId: ID(16), status: 'accepted' } });
   await db.personLink.create({ data: { orgId, eventId: ids.event, personId: ids.person, tokenHash: hashToken(`plink-${key}`), expiresAt: new Date(t.getTime() + 86_400_000) } });
   await db.runOfShowRow.create({ data: { id: ids.runOfShowRow, orgId, eventId: ids.event, sourceKey: `manual:${ids.runOfShowRow}`, manual: true, at: '09:00', cue: 'Doors open', sortOrder: 0 } });
   await db.alert.create({ data: { id: ids.alert, orgId, eventId: ids.event, kind: 'no_show', personId: ids.person, assignmentId: ids.assignment, aorId: ids.aor } });

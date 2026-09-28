@@ -6,9 +6,11 @@ import { ActionForm } from '@/core/ui/action-form';
 import { aor as stripe } from '@/lib/colors';
 import { shownTier, tiersFor } from '@/lib/review';
 import { TierPill } from '@/lib/review-fields';
+import { now } from '@/core/clock';
 import { inviteCap } from '@/lib/staffing';
-import { fmtDay, fmtTime } from '@/lib/time';
-import { invite, nudgeUnconfirmed, setAssignmentStatus } from './actions';
+import { isLive, OPEN_SWAP, swapInclude } from '@/lib/swaps';
+import { fmtDay, fmtTime, fmtWhen } from '@/lib/time';
+import { decideSwap, invite, nudgeUnconfirmed, setAssignmentStatus } from './actions';
 
 export const metadata = { title: 'Staff' };
 
@@ -25,6 +27,8 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
     },
   });
   if (!event) notFound();
+  const t = now();
+  const swaps = (await db.swap.findMany({ where: { ...inOrg(ctx), eventId: event.id, status: { in: OPEN_SWAP } }, include: swapInclude, orderBy: { createdAt: 'asc' } })).filter((x) => isLive(x, t));
   const tiers = await tiersFor(ctx.orgId);
   // Most reliable first, so the 7am openers get filled from the top of the list (PRD 3).
   const people = (await db.person.findMany({ where: inOrg(ctx), orderBy: { name: 'asc' } })).map((p) => ({ ...p, tier: shownTier(p, tiers) })).sort((a, b) => a.tier.tier - b.tier.tier || Number(!!b.wantsBackAt) - Number(!!a.wantsBackAt)); // within a tier, the people who asked to come back (PRD 6)
@@ -42,6 +46,29 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
         <input type="hidden" name="eventId" value={event.id} />
         <button type="submit">Nudge everyone still unconfirmed</button>
       </ActionForm>
+
+      {swaps.length > 0 && (
+        <section>
+          <h2>Swaps</h2>
+          <ul className="plain">
+            {swaps.map((x) => (
+              <li key={x.id} className="row">
+                <span className="grow">
+                  {x.from.person.name} would take {x.to.shift.position.name}, {fmtWhen(x.to.shift.startAt, tz)}; {x.to.person.name} would take {x.from.shift.position.name}, {fmtWhen(x.from.shift.startAt, tz)}
+                  {' · '}{x.status === 'proposed' ? `waiting on ${x.to.person.name}` : `both agreed, waiting on ${x.from.shift.position.area.aor?.lead?.name ?? 'you'}`}
+                </span>
+                {x.status === 'accepted' && (
+                  <ActionForm action={bind(decideSwap)}>
+                    <input type="hidden" name="id" value={x.id} />
+                    <button type="submit" name="decision" value="approve" className="primary">Approve</button>
+                    <button type="submit" name="decision" value="refuse">Refuse</button>
+                  </ActionForm>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {event.days.map((day) => (
         <section key={day.id}>

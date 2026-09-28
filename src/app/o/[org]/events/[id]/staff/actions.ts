@@ -13,6 +13,7 @@ import { notify } from '@/lib/messages';
 import { must } from '@/lib/refuse';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { assignmentInclude, describeAssignment, inviteCap, linkExpiry } from '@/lib/staffing';
+import { decideSwap as decide, SWAP_SAYS, swapDone } from '@/lib/swaps';
 
 // Assignments and invites (PRD 3). Inviting is sending: the assignment row and its message commit together,
 // then the outbox is drained right away so a planner's sends do not wait for the hourly cron.
@@ -91,3 +92,12 @@ export const setAssignmentStatus = orgAction(
     redirect(page(ctx, a.eventId));
   },
 );
+
+/** The planner's word on a swap both people have agreed to (PRD 3). A lead does the same from their own page. */
+export const decideSwap = orgAction(null, z.object({ id: ref('swap'), decision: z.enum(['approve', 'refuse']) }), async (ctx, i) => {
+  const s = must(await db.swap.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { eventId: true } }));
+  const r = await decide({ name: 'the planner' }, ctx, { orgId: ctx.orgId }, i.id, i.decision === 'approve');
+  await drainOutbox(5);
+  if (!swapDone(r)) throw new Refused(SWAP_SAYS[r]);
+  redirect(page(ctx, s.eventId));
+});

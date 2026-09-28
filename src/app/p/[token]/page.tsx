@@ -12,6 +12,7 @@ import { PlaybookView } from '@/lib/playbook-view';
 import { shownTier, tiersFor } from '@/lib/review';
 import { TierPill } from '@/lib/review-fields';
 import { assignmentInclude, firstName } from '@/lib/staffing';
+import { isLive, OPEN_SWAP, SWAP_SAYS, swapInclude, swappable, type SwapSays } from '@/lib/swaps';
 import { fmtDay, fmtTime, fmtWhen } from '@/lib/time';
 import { Taps } from './taps';
 
@@ -19,6 +20,7 @@ import { Taps } from './taps';
 // nothing else: where, when, what to wear, who to ask, what the job is, one tap to answer, and on the
 // day one tap to check in, check out or ask for help. A lead also runs their AoR from here: tap
 // check-in for their crew (offline-capable, see taps.tsx), overdue flags and the alerts they own.
+// Before the day a person can ask a colleague in their own area to swap shifts; the lead approves here.
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Your shifts', robots: { index: false, follow: false } };
 
@@ -59,6 +61,24 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
   // Tiers are for leads and planners only (PRD 6): computed for a lead's crew, never rendered on anyone's own card.
   const crew = leads.flatMap((aor) => aor.areas.flatMap((ar) => ar.positions.flatMap((p) => p.shifts.flatMap((s) => s.assignments.map((x) => x.personId)))));
   const tiers = crew.length ? await tiersFor(orgId, crew) : new Map();
+  // Swaps (PRD 3): mine, the ones asked of me, and the agreed ones waiting on me as a lead.
+  const myAorIds = leads.map((x) => x.id);
+  const swaps = (await db.swap.findMany({
+    where: { ...scope, status: { in: OPEN_SWAP }, OR: [{ from: { personId: person.id } }, { to: { personId: person.id } }, { status: 'accepted', from: { shift: { position: { area: { aorId: { in: myAorIds } } } } } }] },
+    include: swapInclude, orderBy: { createdAt: 'asc' },
+  })).filter((x) => isLive(x, t));
+  // Who a shift could be swapped with: confirmed people in the same area of responsibility, by name and shift only.
+  const mine = event.status === 'closed' ? [] : assignments.filter((a) => swappable(a, t));
+  const aorIds = mine.map((a) => a.shift.position.area.aorId);
+  const colleagues = mine.length === 0 ? [] : await db.assignment.findMany({
+    where: {
+      ...scope, personId: { not: person.id }, status: 'confirmed', checkedInAt: null,
+      shift: { callAt: { gt: t }, position: { area: { OR: [{ aorId: { in: aorIds.filter((x) => x !== null) } }, ...(aorIds.includes(null) ? [{ aorId: null }] : [])] } } },
+    },
+    include: { person: { select: { name: true } }, shift: { include: { position: { include: { area: { select: { aorId: true } } } } } } },
+    orderBy: { shift: { startAt: 'asc' } }, take: 200,
+  });
+  const takes = (a: { shift: { startAt: Date; position: { name: string } } }) => `${a.shift.position.name}, ${fmtWhen(a.shift.startAt, tz)}`;
   const act = `/p/${token}/act`;
   const onDay = assignments.some((a) => a.shift.callAt.getTime() - EARLY_MS <= t.getTime() && t.getTime() <= a.shift.endAt.getTime() + 3_600_000);
 
@@ -66,7 +86,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
     <main className="floor">
       <h1>{event.name}</h1>
       <p>Hi {firstName(person.name)}.{event.venue && ` ${event.venue}.`}</p>
-      {done && DONE[done] && <p role="status">{DONE[done]}</p>}
+      {done && (DONE[done] ?? SWAP_SAYS[done as SwapSays]) && <p role="status">{DONE[done] ?? SWAP_SAYS[done as SwapSays]}</p>}
       <Taps token={token} />
       {event.status === 'closed' && (
         <article>
@@ -93,8 +113,23 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
         </article>
       ))}
 
+      {swaps.filter((x) => x.status === 'proposed' && x.to.personId === person.id).map((x) => (
+        <article key={x.id} className="alert">
+          <p><strong>{x.from.person.name} asks to swap shifts.</strong></p>
+          <p>You would take {takes(x.from)} (be there by {fmtTime(x.from.shift.callAt, tz)}). They would take your {takes(x.to)}. Nothing changes until your lead approves.</p>
+          <form method="post" action={act} className="pair">
+            <input type="hidden" name="swap" value={x.id} />
+            <button type="submit" name="kind" value="swap_yes" className="primary">Accept</button>
+            <button type="submit" name="kind" value="swap_no">Decline</button>
+          </form>
+        </article>
+      ))}
+
       {assignments.map((a) => {
         const area = a.shift.position.area;
+        const asked = swaps.find((x) => x.fromId === a.id);
+        const offered = swaps.some((x) => x.toId === a.id);
+        const options = mine.includes(a) && !asked && !offered ? colleagues.filter((c) => c.shift.position.area.aorId === area.aorId && c.shiftId !== a.shiftId) : [];
         const lead = area.aor?.lead;
         const window = a.shift.callAt.getTime() - EARLY_MS <= t.getTime() && t.getTime() <= a.shift.endAt.getTime() + 3_600_000;
         return (
@@ -124,6 +159,26 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
                 <button type="submit" name="answer" value="confirm" disabled={a.status === 'confirmed'} className="primary">Confirm</button>
                 <button type="submit" name="answer" value="decline" disabled={a.status === 'declined'}>Decline</button>
               </form>
+            )}
+            {asked && (
+              <form method="post" action={act}>
+                <p>You asked {asked.to.person.name} to swap for {takes(asked.to)}. Waiting on {asked.status === 'proposed' ? firstName(asked.to.person.name) : 'your lead'}; this shift is yours until it is approved.</p>
+                <input type="hidden" name="kind" value="swap_withdraw" />
+                <input type="hidden" name="swap" value={asked.id} />
+                <button type="submit">Withdraw the swap</button>
+              </form>
+            )}
+            {options.length > 0 && (
+              <details>
+                <summary>Swap this shift</summary>
+                <form method="post" action={act}>
+                  <input type="hidden" name="kind" value="swap_ask" />
+                  <input type="hidden" name="assignment" value={a.id} />
+                  <label>Swap with <select name="other" required>{options.map((c) => <option key={c.id} value={c.id}>{c.person.name}: {takes(c)}</option>)}</select></label>
+                  <p>They get a text and can accept or decline. Your lead has the last word.</p>
+                  <button type="submit">Ask to swap</button>
+                </form>
+              </details>
             )}
           </article>
         );
@@ -185,6 +240,23 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
                       <button type="submit">Handled</button>
                     </form>
                   </div>
+                </article>
+              ))}
+            </div>
+          )}
+          {swaps.some((x) => x.status === 'accepted' && x.from.shift.position.area.aorId === aor.id) && (
+            <div>
+              <h3>Swaps to approve</h3>
+              {swaps.filter((x) => x.status === 'accepted' && x.from.shift.position.area.aorId === aor.id).map((x) => (
+                <article key={x.id} className="alert">
+                  <p><strong>{x.from.person.name} and {x.to.person.name} want to swap.</strong> {firstName(x.from.person.name)} would take {takes(x.to)}; {firstName(x.to.person.name)} would take {takes(x.from)}.</p>
+                  {x.from.personId === person.id || x.to.personId === person.id ? <p>You are part of this swap, so {aor.leadId === person.id ? 'your deputy' : 'your lead'} or the planner decides.</p> : (
+                    <form method="post" action={act} className="pair">
+                      <input type="hidden" name="swap" value={x.id} />
+                      <button type="submit" name="kind" value="swap_approve" className="primary">Approve</button>
+                      <button type="submit" name="kind" value="swap_refuse">Refuse</button>
+                    </form>
+                  )}
                 </article>
               ))}
             </div>

@@ -9,10 +9,11 @@ with "Ship phase 3".
 - CI runs on main and on pull requests only, so a push to a stacked branch starts no run.
 - Delete this block once CI is green on main.
 
-> **Pick up here: backlog 8, PRD 3 swaps.** Opus-class: it adds writes to the no-login person page. Branch from
-> `foundation-v1.2.0`. Every new page, layout and route handler must await `requireOrg`/`requireUser` first or carry a
-> `// public: <reason>` line, and every id-like action field needs `ref()` or `notRef()` (FR-06, FR-08), or the
-> invariant test fails. Foundation today: `v1.2.0`, not on main yet (see "Ship phase 3").
+> **Pick up here: nothing is queued.** Backlog 8 (swaps) is built on branch `prd3-swaps`, the sixth stacked branch.
+> Backlog 9 waits until it is asked for, so the next move is Shane's: "Ship phase 3" below. Every new page, layout and
+> route handler must await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like
+> action field needs `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`,
+> not on main yet.
 
 ## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
@@ -42,21 +43,53 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 5. ~~Foundation upgrade to v1.0.3~~ merged 2026-09-28 on branch `foundation-v1.0.3`, stacked on `foundation-v1.0.2` (below). **Not on main: see "Ship phase 3".**
 6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. **Not on main: see "Ship phase 3".**
 7. ~~Foundation upgrade to v1.1.0, v1.1.1 and v1.2.0~~ merged 2026-09-28 on branch `foundation-v1.2.0`, stacked on `phase-3-slice-2` (below). **Not on main: see "Ship phase 3".**
-8. PRD 3 swaps: a person proposes a swap with a named colleague, both accept, the lead approves, the two assignments change hands in one transaction. Opus-class item: it adds writes to the no-login person page.
+8. ~~PRD 3 swaps~~ built 2026-09-28 on branch `prd3-swaps`, stacked on `foundation-v1.2.0` (below). **Not on main: see "Ship phase 3".**
 9. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
 ## Ship phase 3 (Shane, in this order)
 The production database must get both migrations before main gets the code: main auto-deploys, and the new code selects columns
 (`Position.cardId`, `Event.closedAt`, `Person.tierOverride`, `BillingAccount.stripeSubscriptionId`) the old database does not have.
 Both migrations only add, so the code running in production today keeps working after step 1.
-1. `npm run db:migrate:prod` (applies `20260927000000_billing_subscription_id`, `20260927164228_phase3_consistency` and
-   `20260928120000_phase3_library`). All three only add.
-2. `git checkout main && git merge --ff-only foundation-v1.2.0 && git push` ships both phase 3 slices, the outbox fix and the
-   foundation security fixes through v1.2.0 together, and turns CI green. To ship less, merge `phase-3`, `foundation-v1.0.2`,
-   `foundation-v1.0.3` or `phase-3-slice-2` instead; each is a fast-forward and the rest follows later. The v1.1.1 security
+1. `npm run db:migrate:prod` (applies `20260927000000_billing_subscription_id`, `20260927164228_phase3_consistency`,
+   `20260928120000_phase3_library` and `20260928200000_swaps`). All four only add.
+2. `git checkout main && git merge --ff-only prd3-swaps && git push` ships both phase 3 slices, the outbox fix, the
+   foundation security fixes through v1.2.0 and swaps together, and turns CI green. To ship less, merge `phase-3`,
+   `foundation-v1.0.2`, `foundation-v1.0.3`, `phase-3-slice-2` or `foundation-v1.2.0` instead; each is a fast-forward and the rest follows later. The v1.1.1 security
    fixes are due on main by 2026-10-05. Everyone signed in is signed out once by this deploy (the session cookie is renamed).
 3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, adds three closed past events so tiers
    show in the demo, and adds the Registration playbook, the house rules and the "Expo template". It is idempotent.
+
+## Swaps 2026-09-28 (backlog 8, PRD 3 P1)
+- **The flow**: on their own page a person opens "Swap this shift" under a confirmed shift and picks a colleague's shift. The
+  colleague gets a text and accepts or declines on their page. The lead then approves or refuses under "Swaps to approve" on
+  theirs; a planner can do the same from the Staff page, which lists every open swap. Nothing moves until the approval.
+- **What approval does**: each assignment row moves to the other's shift (`Assignment.shiftId`), in one transaction, and only
+  if it is still what was offered (same shift, confirmed, not checked in). Answers, alerts and history stay with the person.
+  `t7SentAt` and `t1SentAt` are cleared, so the pack goes out again for the new shift. Both people get their new shift by text.
+- **Who may do what** (`src/lib/swaps.ts`, called by `/p/[token]/act` and the Staff action): only the link's own person offers
+  their shift, only the named colleague answers, only a lead or deputy of that AoR approves, and never someone who is part of
+  the swap (the deputy is asked instead, then the planners by email).
+- **Refused with a reason**: another AoR, a double booking for either person on any event in the org (the invite's conflict
+  check), a shift either has already answered for, a second swap on a shift that has one waiting, a shift past call time.
+  The reason travels as a code in `?done=`, never as text, so a crafted link cannot put words on the page.
+- **Defaults taken, all reversible, Shane to confirm**: swaps stay inside one AoR (across AoRs is the planner's by hand); a
+  person sees the names and shifts, never the mobiles, of confirmed people in their own AoR; five asks a day per person, since
+  every ask sends a text; an approved swap cannot be undone except by a second swap or the planner.
+- Skipped (add when asked): SMS keywords for a swap, a minimum-age check (invites do not check it either), a swap for a shift
+  that is only invited, a demo swap in the seed, the planner's name in "refused by" (it says "the planner"; the audit log names
+  the user).
+- One migration, `20260928200000_swaps`: the `Swap` table and its enum. It only adds.
+- Gate: lint and typecheck clean; vitest 192 of 192 (7 new in `tests/integration/callboard-swaps.test.ts`); e2e `callboard` +
+  `headers` 10 of 10 against a production build (one new spec, through three phones and the Staff page); `foundation:drift`
+  clean; `foundation:check-modules` passes. The invariant harness covers the new Staff action; the fixture gained a swap row.
+- Environment: the first vitest run lost three `inv-09-rate-limits` tests at load 27 (five other projects' runners were up).
+  Killing it with `pkill -f "$PWD.*vitest"` left its workers alive, because a worker's command line is `node (vitest 1)` with
+  no path in it, and the next run then shared the database with them and failed differently (`Org_slug_key`, a count of 0).
+  **Kill by working directory instead** (`lsof -a -p <pid> -d cwd`), and check `pg_stat_activity` for `callboard_test` is 0
+  before starting again. The clean rerun took 63 s.
+- Found on the way: nothing in the person page's POST route showed a refusal to someone without JavaScript: `reply` redirects
+  a plain form and drops the error. Swaps carry theirs as a `done` code. Check-in refusals ("too early") still vanish for a
+  plain form; taps.tsx shows them when JavaScript runs.
 
 ## Foundation v1.2.0 2026-09-28 (backlog 7)
 - Merged tag `v1.2.0` in one merge, which carries `v1.1.0` (FR-06..11), `v1.1.1` (security LOWs K1, K2, K5, K6, K13) and
