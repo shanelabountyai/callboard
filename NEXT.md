@@ -4,6 +4,8 @@
 > `callboard-ten.vercel.app` (PR #2, merged 2026-09-28). The move itself waits on the Cloudflare record: on 2026-09-28
 > Cloudflare's own nameservers answered NXDOMAIN for `callboard.labintelligence.co`. Check with
 > `dig +short callboard.labintelligence.co @kobe.ns.cloudflare.com` before doing anything else.
+> Checked again later on 2026-09-28: still NXDOMAIN, and no near-miss name resolves either (`calboard`, `staffing`,
+> the doubled zone). The record Vercel asks for is `A callboard 76.76.21.21`, DNS-only, the same as showcall's.
 > Availability and the Preview switch-off shipped to main and production on 2026-09-28 (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
 > Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
 > await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
