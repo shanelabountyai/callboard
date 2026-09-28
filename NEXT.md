@@ -1,26 +1,18 @@
 # NEXT
 
-## ⚠ CI is red until backlog 7 lands on main (updated 2026-09-28)
-Only `modules-removed` fails; the `ci` job passes. Callboard sends every text through the notifications outbox, so the
-template's check that both modules can be deleted cannot hold here.
-- **Decision (Shane, 2026-09-28): fix it upstream.** Done the same day: foundation `v1.2.0` (F-03, `919edc0`) adds the
-  clone-owned `src/app/required-modules.ts`, and `foundation:check-modules` leaves a module named there in place.
-- **The fix here is part of backlog 7:** after merging `v1.2.0`, set `REQUIRED_MODULES` to `['notifications']`, then run
-  `npm run foundation:check-modules` once. The foundation proved it in the template only. Whether billing alone removes
-  cleanly from Callboard has never been run.
+## ⚠ CI is red until `foundation-v1.2.0` lands on main (updated 2026-09-28)
+Only `modules-removed` fails on main; the `ci` job passes. The fix is built and proven on branch `foundation-v1.2.0`
+(`REQUIRED_MODULES = ['notifications']`, `npm run foundation:check-modules` passes with billing removed). It reaches main
+with "Ship phase 3".
 - **Every item:** run `gh run list --limit 3` before starting and after pushing, and read the jobs
   (`gh run view <id> --json jobs`). A red `ci` job is the item, ahead of the queue. A red `modules-removed` alone is not.
 - CI runs on main and on pull requests only, so a push to a stacked branch starts no run.
 - Delete this block once CI is green on main.
 
-> **Pick up here: backlog 7, the foundation upgrade to `v1.1.0` (FR-06..11), `v1.1.1` (6 LOWs, `security:`) and `v1.2.0`
-> (F-03, required modules).** All three tags are fetched locally. v1.1.0 was
-> published by midday 2026-09-28 (`d422d1a`); v1.1.1 followed the same day (`a121708`) — stale sign-in links, TOTP concurrent
-> double-issue, IPv6 rate-limit /64 scoping, orphaned share links, non-atomic audit writes. `security:` releases are due
-> within 7 days — **v1.1.1 is due 2026-10-05.** Branch from `phase-3-slice-2`. The `template` remote is SSH and fails host
-> key verification in an unattended session, so fetch both tags:
-> `git fetch https://github.com/shanelabountyai/saas-foundation.git 'refs/tags/v1.1.0:refs/tags/v1.1.0' 'refs/tags/v1.1.1:refs/tags/v1.1.1'`.
-> Foundation today: `v1.0.3`, not on main yet (see "Ship phase 3").
+> **Pick up here: backlog 8, PRD 3 swaps.** Opus-class: it adds writes to the no-login person page. Branch from
+> `foundation-v1.2.0`. Every new page, layout and route handler must await `requireOrg`/`requireUser` first or carry a
+> `// public: <reason>` line, and every id-like action field needs `ref()` or `notRef()` (FR-06, FR-08), or the
+> invariant test fails. Foundation today: `v1.2.0`, not on main yet (see "Ship phase 3").
 
 ## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
@@ -49,7 +41,7 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 4. ~~Foundation upgrade to v1.0.2~~ merged 2026-09-28 on branch `foundation-v1.0.2`, stacked on `phase-3` (below). **Not on main: see "Ship phase 3".**
 5. ~~Foundation upgrade to v1.0.3~~ merged 2026-09-28 on branch `foundation-v1.0.3`, stacked on `foundation-v1.0.2` (below). **Not on main: see "Ship phase 3".**
 6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. **Not on main: see "Ship phase 3".**
-7. Foundation upgrade to v1.1.0 (FR-06..11), v1.1.1 (6 LOWs, `security:`, due 2026-10-05) and v1.2.0 (F-03). All published 2026-09-28. Then `REQUIRED_MODULES = ['notifications']` and one run of `foundation:check-modules`.
+7. ~~Foundation upgrade to v1.1.0, v1.1.1 and v1.2.0~~ merged 2026-09-28 on branch `foundation-v1.2.0`, stacked on `phase-3-slice-2` (below). **Not on main: see "Ship phase 3".**
 8. PRD 3 swaps: a person proposes a swap with a named colleague, both accept, the lead approves, the two assignments change hands in one transaction. Opus-class item: it adds writes to the no-login person page.
 9. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
@@ -59,11 +51,31 @@ The production database must get both migrations before main gets the code: main
 Both migrations only add, so the code running in production today keeps working after step 1.
 1. `npm run db:migrate:prod` (applies `20260927000000_billing_subscription_id`, `20260927164228_phase3_consistency` and
    `20260928120000_phase3_library`). All three only add.
-2. `git checkout main && git merge --ff-only phase-3-slice-2 && git push` ships both phase 3 slices, the outbox fix and the v1.0.3
-   security fixes together. To ship less, merge `phase-3`, `foundation-v1.0.2` or `foundation-v1.0.3` instead; each is a
-   fast-forward and the rest follows later.
+2. `git checkout main && git merge --ff-only foundation-v1.2.0 && git push` ships both phase 3 slices, the outbox fix and the
+   foundation security fixes through v1.2.0 together, and turns CI green. To ship less, merge `phase-3`, `foundation-v1.0.2`,
+   `foundation-v1.0.3` or `phase-3-slice-2` instead; each is a fast-forward and the rest follows later. The v1.1.1 security
+   fixes are due on main by 2026-10-05. Everyone signed in is signed out once by this deploy (the session cookie is renamed).
 3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, adds three closed past events so tiers
    show in the demo, and adds the Registration playbook, the house rules and the "Expo template". It is idempotent.
+
+## Foundation v1.2.0 2026-09-28 (backlog 7)
+- Merged tag `v1.2.0` in one merge, which carries `v1.1.0` (FR-06..11), `v1.1.1` (security LOWs K1, K2, K5, K6, K13) and
+  F-03. No migration. Conflicts: this file and the two layouts, both kept as Callboard's with the template's new markers added.
+- What changes for users: the session cookie is now `__Host-session` and always `Secure`, so the deploy signs everyone out
+  once; "sign out everywhere" also kills unused sign-in links; a TOTP code cannot be issued twice at once; rate limits count
+  an IPv6 /64 as one address; share links die with their org; audit writes are atomic.
+- Callboard changes the merge forced (FR-06): nine `/o/[org]/events/[id]` entrypoints did guard, but after `await params`.
+  They now await `requireOrg` first. The five `/p/[token]` entrypoints and the Twilio webhook carry `// public:` lines naming
+  their credential (the link token plus a same-origin POST; the Twilio signature). No action needed a `ref()` or `notRef()`.
+- F-03: `REQUIRED_MODULES = ['notifications']`. `foundation:check-modules` removes billing alone and passes validate,
+  generate, typecheck, build and drift. That is the first time billing has been removed from Callboard.
+- Found on the way: `foundation:drift` had been failing unseen, since CI only runs it inside `modules-removed`. Two files
+  differed: Prisma's comment lines in `migration_lock.toml` (restored to the template's) and the design pass's edit to
+  `src/core/ui/action-form.tsx`, now listed in `FOUNDATION_PATCHES.md` with its hash. That patch should go upstream.
+  `prisma migrate dev` may rewrite the lock file's comments; check it out from the tag again if drift names it.
+- Not verified: Safari on plain `http://localhost` with the always-`Secure` cookie. Chromium is what the e2e suite runs.
+- Gate: lint and typecheck clean; vitest 185 of 185 (24 new from the foundation); e2e 16 of 16, all seven specs, against a
+  production build; `foundation:drift` clean against v1.2.0; `foundation:check-modules` passes.
 
 ## Phase 3, second slice 2026-09-28 (backlog 6)
 - **Standard rules** (`/o/[org]/rules`, nav "Rules"): ten rules in `src/lib/rules.ts`. Six are numbers that drive behaviour (no-show

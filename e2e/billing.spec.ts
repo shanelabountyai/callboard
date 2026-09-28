@@ -19,7 +19,7 @@ async function seedOwner() {
   return { org, slug, token };
 }
 
-test('an owner subscribes through the mock provider, then sees the plan a webhook set', async ({ page, context, baseURL }) => {
+test('an owner subscribes through the mock provider, then sees the plan a webhook set', async ({ page, context }) => {
   const { org, slug, token } = await seedOwner();
   await context.addCookies([{ name: '__Host-session', value: token, domain: 'localhost', path: '/', secure: true }]);
 
