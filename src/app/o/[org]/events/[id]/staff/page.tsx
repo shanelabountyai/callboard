@@ -7,7 +7,7 @@ import { aor as stripe } from '@/lib/colors';
 import { shownTier, tiersFor } from '@/lib/review';
 import { TierPill } from '@/lib/review-fields';
 import { now } from '@/core/clock';
-import { inviteCap } from '@/lib/staffing';
+import { inviteCap, OPEN, overlapping } from '@/lib/staffing';
 import { isLive, OPEN_SWAP, swapInclude } from '@/lib/swaps';
 import { fmtDay, fmtTime, fmtWhen } from '@/lib/time';
 import { decideSwap, invite, nudgeUnconfirmed, setAssignmentStatus } from './actions';
@@ -32,6 +32,12 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
   const tiers = await tiersFor(ctx.orgId);
   // Most reliable first, so the 7am openers get filled from the top of the list (PRD 3).
   const people = (await db.person.findMany({ where: inOrg(ctx), orderBy: { name: 'asc' } })).map((p) => ({ ...p, tier: shownTier(p, tiers) })).sort((a, b) => a.tier.tier - b.tier.tier || Number(!!b.wantsBackAt) - Number(!!a.wantsBackAt)); // within a tier, the people who asked to come back (PRD 6)
+  // Who is taken, and by what, at any time this event runs: open assignments anywhere in the org.
+  const shifts = event.days.flatMap((d) => d.shifts);
+  const span = { startAt: new Date(Math.min(...shifts.map((s) => +s.startAt))), endAt: new Date(Math.max(...shifts.map((s) => +s.endAt))) };
+  const taken = shifts.length
+    ? await db.assignment.findMany({ where: { ...inOrg(ctx), status: { in: OPEN }, shift: overlapping(span) }, select: { personId: true, shiftId: true, shift: { select: { startAt: true, endAt: true, position: { select: { name: true } }, event: { select: { name: true } } } } } })
+    : [];
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const tz = event.timezone;
   const all = event.days.flatMap((d) => d.shifts.flatMap((s) => s.assignments));
@@ -78,6 +84,7 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
             const open = s.assignments.filter((a) => a.status === 'invited' || a.status === 'confirmed');
             const confirmed = open.filter((a) => a.status === 'confirmed').length;
             const onShift = new Set(open.map((a) => a.personId));
+            const busy = new Map(taken.filter((x) => x.shiftId !== s.id && x.shift.startAt < s.endAt && x.shift.endAt > s.startAt).map((x) => [x.personId, x.shift]));
             const tone = confirmed >= s.needed ? 'green' : confirmed >= 0.8 * s.needed ? 'amber' : 'red';
             return (
               <article key={s.id} className="stripe" style={stripe(s.position.area.aor?.color)}>
@@ -104,11 +111,15 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
                   <ActionForm action={bind(invite)}>
                     <input type="hidden" name="shiftId" value={s.id} />
                     <div className="columns">
-                      {people.filter((p) => !onShift.has(p.id)).map((p) => (
-                        <label key={p.id}>
-                          <input type="checkbox" name={`p:${p.id}`} /> {p.name} <TierPill t={p.tier} /> <small>({p.kind}{p.department && `, ${p.department}`}{p.wantsBackAt && `, asked to come back ${fmtDay(p.wantsBackAt, tz)}`})</small>
-                        </label>
-                      ))}
+                      {people.filter((p) => !onShift.has(p.id)).sort((a, b) => Number(busy.has(a.id)) - Number(busy.has(b.id))).map((p) => {
+                        const b = busy.get(p.id); // free people first; the busy stay listed, with what holds them
+                        return (
+                          <label key={p.id}>
+                            <input type="checkbox" name={`p:${p.id}`} disabled={!!b} /> {p.name} <TierPill t={p.tier} /> <small>({p.kind}{p.department && `, ${p.department}`}{p.wantsBackAt && `, asked to come back ${fmtDay(p.wantsBackAt, tz)}`})</small>
+                            {b && <small> · busy: {b.position.name} at {b.event.name}, {fmtTime(b.startAt, tz)} to {fmtTime(b.endAt, tz)}</small>}
+                          </label>
+                        );
+                      })}
                     </div>
                     <button type="submit" className="primary">Send invites</button>
                   </ActionForm>

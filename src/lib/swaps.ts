@@ -6,7 +6,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import type { SwapStatus } from '@/generated/prisma/enums';
 import { ensurePersonLink } from './links';
 import { notify, notifyPlanners } from './messages';
-import { assignmentInclude, describeAssignment, firstName, linkExpiry, type FullAssignment } from './staffing';
+import { assignmentInclude, describeAssignment, firstName, linkExpiry, OPEN, overlapping as over, type FullAssignment } from './staffing';
 import { fmtWhen } from './time';
 
 // Swaps (PRD 3): a person offers their shift for a named colleague's, the colleague accepts, the lead
@@ -61,10 +61,9 @@ async function problem(tx: Tx, a: FullAssignment, b: FullAssignment, t: Date): P
   // A row is unique on shift and person, and a decline is a row.
   if (await tx.assignment.count({ where: { OR: [{ shiftId: b.shiftId, personId: a.personId }, { shiftId: a.shiftId, personId: b.personId }] } })) return 'swap_held';
   // The conflict check an invite makes (PRD 3), for each person against the shift they would take.
-  const over = (s: { startAt: Date; endAt: Date }) => ({ startAt: { lt: s.endAt }, endAt: { gt: s.startAt } });
   const clash = await tx.assignment.count({
     where: {
-      orgId: a.orgId, status: { in: ['invited', 'confirmed'] },
+      orgId: a.orgId, status: { in: OPEN },
       OR: [{ personId: a.personId, id: { not: a.id }, shift: over(b.shift) }, { personId: b.personId, id: { not: b.id }, shift: over(a.shift) }],
     },
   });

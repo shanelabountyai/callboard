@@ -7,19 +7,17 @@ import { inOrg, type OrgCtx } from '@/core/authz/guards';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
-import type { AssignmentStatus } from '@/generated/prisma/enums';
 import { ensurePersonLink } from '@/lib/links';
 import { notify } from '@/lib/messages';
 import { must } from '@/lib/refuse';
 import { drainOutbox } from '@/modules/notifications/outbox';
-import { assignmentInclude, describeAssignment, inviteCap, linkExpiry } from '@/lib/staffing';
+import { assignmentInclude, clashSays, describeAssignment, findClash, inviteCap, linkExpiry, OPEN } from '@/lib/staffing';
 import { decideSwap as decide, SWAP_SAYS, swapDone } from '@/lib/swaps';
 
 // Assignments and invites (PRD 3). Inviting is sending: the assignment row and its message commit together,
 // then the outbox is drained right away so a planner's sends do not wait for the hourly cron.
 // ponytail: a synchronous drain capped at 25 keeps the request short; the cron sends the rest within the hour.
 const page = (ctx: OrgCtx, eventId: string) => `/o/${ctx.slug}/events/${eventId}/staff`;
-const OPEN: AssignmentStatus[] = ['invited', 'confirmed'];
 const daysOut = (callAt: Date) => {
   const d = Math.round((callAt.getTime() - now().getTime()) / 86_400_000);
   return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`;
@@ -39,11 +37,8 @@ export const invite = orgAction(null, z.looseObject({ shiftId: ref('shift') }), 
   if (open.length + fresh.length > cap) {
     throw new Refused(`That would be ${open.length + fresh.length} invites for ${shift.needed} needed; the overbook cap is ${cap}. Raise needed or the overbook %.`);
   }
-  const clash = await db.assignment.findFirst({
-    where: { ...inOrg(ctx), personId: { in: fresh.map((p) => p.id) }, status: { in: OPEN }, shift: { startAt: { lt: shift.endAt }, endAt: { gt: shift.startAt } } },
-    include: { person: true, shift: { include: { position: true, event: true } } },
-  });
-  if (clash) throw new Refused(`${clash.person.name} is already ${clash.status} for ${clash.shift.position.name} at ${clash.shift.event.name} at the same time.`);
+  const clash = await findClash(db, ctx.orgId, fresh.map((p) => p.id), shift);
+  if (clash) throw new Refused(clashSays(clash));
   await db.$transaction(async (tx) => {
     for (const p of fresh) {
       const prior = shift.assignments.find((a) => a.personId === p.id); // declined or released before: re-invite the same row
@@ -80,6 +75,9 @@ export const setAssignmentStatus = orgAction(
   z.object({ id: ref('assignment'), status: z.enum(['invited', 'confirmed', 'declined', 'released']) }),
   async (ctx, i) => {
     const a = must(await db.assignment.findFirst({ where: { id: i.id, ...inOrg(ctx) }, include: assignmentInclude }));
+    // Reopening a decline or a release gives the shift back, so it is checked like an invite.
+    const clash = i.status === 'invited' || i.status === 'confirmed' ? await findClash(db, ctx.orgId, [a.personId], a.shift, a.id) : null;
+    if (clash) throw new Refused(clashSays(clash));
     await db.$transaction(async (tx) => {
       await tx.assignment.update({ where: { id: a.id }, data: { status: i.status, respondedAt: i.status === 'invited' ? null : now() } });
       if (i.status === 'released' && a.status !== 'released') {

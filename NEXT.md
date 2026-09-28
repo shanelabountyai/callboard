@@ -1,7 +1,8 @@
 # NEXT
 
-> **Pick up here: nothing is queued.** Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and
-> production on 2026-09-28 (below). Backlog 9 waits until it is asked for. Every new page, layout and route handler must
+> **Pick up here: merge `availability` to main when Shane says go** (PR open, no migration; below). After that nothing is
+> queued. Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
+> Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
 > await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
 > `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`, on main.
 > **Every item:** run `gh run list --limit 3` before starting and after pushing. CI runs on main and on pull requests only.
@@ -35,7 +36,8 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. On main 2026-09-28.
 7. ~~Foundation upgrade to v1.1.0, v1.1.1 and v1.2.0~~ merged 2026-09-28 on branch `foundation-v1.2.0`, stacked on `phase-3-slice-2` (below). On main 2026-09-28.
 8. ~~PRD 3 swaps~~ built 2026-09-28 on branch `prd3-swaps`, stacked on `foundation-v1.2.0` (below). On main 2026-09-28.
-9. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
+9. ~~Availability and Preview builds~~ built 2026-09-28 on branch `availability` (below). Not on main yet.
+10. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was
@@ -45,12 +47,31 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   answer 200; a GET to `/api/sms/inbound` answers 405. Nothing behind a sign-in was clicked through in production.
 - The v1.1.1 security fixes were due on main by 2026-10-05: met. Everyone signed in was signed out once (cookie renamed).
 - The six stacked branches are all contained in main and still exist locally and on origin. Delete them when convenient.
-- **Open, Shane to decide: every push to a branch that is not main starts a Preview build that fails** in about 25 s with
-  `Invalid environment: DATABASE_URL, AUTH_SECRET, APP_URL`, because the Preview environment has no variables. Eight of them
-  failed on 2026-09-28. A failed build bills like a good one. Either skip Preview builds or give Preview its variables.
-- **Open, asked by Shane 2026-09-28: availability.** A double booking is refused at invite and at swap (any open assignment in
-  the org whose shift overlaps). Nothing shows who is free at a given time, the invite list does not mark or hide busy people,
-  and a float deploy from the board makes no overlap check.
+- ~~Open: failing Preview builds~~ and ~~open: availability~~: both decided and built the same day, next section.
+
+## Availability and Preview builds 2026-09-28 (backlog 9)
+- **Decided by Shane 2026-09-28**: build availability (over closing the project or PRD 6 P1), and skip Preview builds (over
+  giving Preview its variables). Neither is to be asked again.
+- **One rule, one place**: `findClash` in `src/lib/staffing.ts` is the double-booking check the invite always made (any open
+  assignment in the org whose shift overlaps). It now runs on every path that gives someone a shift. Three had none:
+  a float deploy from the board; the planner setting a declined or released row back to invited or confirmed; and the person
+  confirming from their link after declining. Each is refused with the name of what holds them. The person sees
+  `?done=clash`. Swaps keep their two-person query and share `OPEN` and `overlapping` with it.
+- **Also fixed on the way**: deploying a float to a shift they had already answered for hit the unique index on (shift, person)
+  and returned a 500. It is a form error now.
+- **Invite list**: free people first, in tier order as before; busy people stay listed, cannot be ticked, and show what holds
+  them ("busy: Greeter at Spring Expo, 7:30 AM to 12:00 PM"). One extra query per Staff page.
+- **Preview builds**: `vercel.json` has `"git": { "deploymentEnabled": { "main": true, "**": false } }`. `**`, because `*` does
+  not match a branch name with a slash. To get preview URLs back, give the Preview environment its three variables, then
+  remove that block.
+- Skipped (add when asked): a "who is free at this time" view of its own (the invite list answers it per shift), hiding busy
+  floats from the board's deploy list (the action refuses with the reason), the check at check-in (the person is standing
+  there), a lock against two requests in the same instant (`ponytail:` note on `findClash`).
+- No migration.
+- Gate: lint and typecheck clean; vitest 194 of 194 (2 new in `tests/integration/callboard-availability.test.ts`); e2e
+  `callboard` + `headers` 10 of 10 against a production build; `foundation:drift` clean against v1.2.0.
+- Found on the way: the first e2e run failed because the spec picked the shift card by "Floor runner", and once Tom is invited
+  every other card at that time says "busy: Floor runner". The spec now matches the heading, and asserts Tom cannot be ticked.
 
 ## Swaps 2026-09-28 (backlog 8, PRD 3 P1)
 - **The flow**: on their own page a person opens "Swap this shift" under a confirmed shift and picks a colleague's shift. The

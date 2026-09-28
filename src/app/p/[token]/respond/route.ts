@@ -5,6 +5,7 @@ import { now } from '@/core/clock';
 import { db } from '@/core/db';
 import { clientIp, isSameOrigin } from '@/core/http';
 import { readPersonLink } from '@/lib/links';
+import { findClash } from '@/lib/staffing';
 
 // Confirm or decline from the person's page. A POST, not a GET on the SMS link: messaging apps
 // prefetch links, and a prefetch must never confirm a shift.
@@ -19,8 +20,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const answer = form.get('answer');
   if (!id.success || (answer !== 'confirm' && answer !== 'decline')) return new Response(null, { status: 400 });
   const status = answer === 'confirm' ? 'confirmed' : 'declined';
+  const mine = { id: id.data, orgId: link.orgId, eventId: link.eventId, personId: link.personId };
+  // A yes after a no takes the shift back, and they may have been given another one since.
+  const shift = answer === 'confirm' ? (await db.assignment.findFirst({ where: mine, select: { shift: true } }))?.shift : null;
+  if (shift && (await findClash(db, link.orgId, [link.personId], shift, id.data))) return Response.redirect(new URL(`/p/${token}?done=clash`, req.url), 303);
   const { count } = await db.assignment.updateMany({
-    where: { id: id.data, orgId: link.orgId, eventId: link.eventId, personId: link.personId, status: { in: ['invited', 'confirmed', 'declined'] } },
+    where: { ...mine, status: { in: ['invited', 'confirmed', 'declined'] } },
     data: { status, respondedAt: now() },
   });
   if (count) await audit({ orgId: link.orgId, userId: null }, `assignment.${status}`, { targetType: 'assignment', targetId: id.data, data: { by: 'person', personId: link.personId } });

@@ -27,6 +27,7 @@ export const metadata = { title: 'Your shifts', robots: { index: false, follow: 
 const DONE: Record<string, string> = {
   confirm: 'Thanks, you are confirmed. See you there.',
   decline: 'Noted. Your lead has been told, and the shift is open for someone else.',
+  clash: 'You have another shift at that time, so this one was not confirmed. Decline the other first, or ask your lead.',
   checkin: 'You are checked in.',
   checkout: 'You are checked out. Thanks for today.',
   help: 'Your lead has been told and will come to you.',

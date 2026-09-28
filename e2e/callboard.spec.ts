@@ -30,11 +30,13 @@ async function signInAsAcmeOwner(page: import('@playwright/test').Page) {
 test('invite from the staff page → SMS link → confirm without a login → planner sees confirmed', async ({ page, context }) => {
   await signInAsAcmeOwner(page);
   await page.getByRole('link', { name: 'Staff this event' }).click();
-  const shift = page.locator('article').filter({ hasText: 'Floor runner' }).first();
+  const shift = page.locator('article').filter({ hasText: 'Floor runner · Exhibit Hall' }).first(); // the heading: once Tom is invited, other shifts' invite lists say "busy: Floor runner"
   await shift.getByText('Invite people to this shift').click();
   await shift.getByLabel(/Tom Alvarez/).check();
   await shift.getByRole('button', { name: 'Send invites' }).click();
   await expect(shift).toContainText('Tom Alvarez (volunteer) · invited');
+  // He is now taken for that morning: every other shift at the same time lists him, but he cannot be ticked.
+  await expect(page.locator('article').filter({ hasText: 'Badge printer · Registration' }).first().getByLabel(/Tom Alvarez/)).toBeDisabled();
 
   // Tom has no email, so exactly one captured message: the SMS with the link.
   const { rows } = await db.query(`SELECT body FROM "CapturedMessage" WHERE "to" = '+15550100006' ORDER BY "createdAt" DESC LIMIT 1`);
@@ -51,7 +53,7 @@ test('invite from the staff page → SMS link → confirm without a login → pl
   await tom.close();
 
   await page.reload();
-  await expect(page.locator('article').filter({ hasText: 'Floor runner' }).first()).toContainText('Tom Alvarez (volunteer) · confirmed');
+  await expect(page.locator('article').filter({ hasText: 'Floor runner · Exhibit Hall' }).first()).toContainText('Tom Alvarez (volunteer) · confirmed');
 });
 
 test('run of show: an .xlsx import replaces imported rows and keeps a hand-added line', async ({ page }) => {
