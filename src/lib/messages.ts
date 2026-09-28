@@ -56,6 +56,11 @@ Object.assign(templates, {
     subject: `${s(d.event)}: reviews still open after a week`,
     body: `Planner: ${s(d.event)} closed a week ago and these areas have no review: ${s(d.areas)}. Finish them from the check-in data or waive them with a note: ${s(d.url)}`,
   }),
+  // `text` is the org's thank-you with the names already filled in (PRD 6); the link is where "count me in" lives.
+  cb_thanks: (d) => ({
+    subject: `${s(d.event)}: thank you`,
+    body: `${s(d.text)} Want to work the next one? Tap to be counted in: ${s(d.url)}`,
+  }),
   // A planner's message (PRD 4). Over 320 characters it becomes a pointer to the page, where the full text waits.
   cb_broadcast: (d) => {
     const ack = d.requiresAck ? ` Got it? Reply GOT IT or tap ${s(d.url)}` : '';

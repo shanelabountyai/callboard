@@ -7,6 +7,7 @@ import { CardView } from '@/lib/card-view';
 import { aor as stripe } from '@/lib/colors';
 import { dueAt, EARLY_MS, HELP_CATEGORIES, isOverdue } from '@/lib/dayof';
 import { readPersonLink } from '@/lib/links';
+import { PlaybookView } from '@/lib/playbook-view';
 import { shownTier, tiersFor } from '@/lib/review';
 import { TierPill } from '@/lib/review-fields';
 import { assignmentInclude, firstName } from '@/lib/staffing';
@@ -29,6 +30,7 @@ const DONE: Record<string, string> = {
   ack: 'Thanks, noted.',
   resolve: 'Alert closed.',
   release: 'Released. They have been told.',
+  back: 'You are on the list for next time. Thank you.',
 };
 
 export default async function PersonPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ done?: string }> }) {
@@ -48,7 +50,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
       include: {
         lead: true, deputy: true,
         alerts: { where: { resolvedAt: null }, include: { person: true, assignment: { include: { shift: { include: { position: true } } } } }, orderBy: [{ severity: 'desc' }, { openedAt: 'asc' }] },
-        areas: { include: { positions: { include: { shifts: { orderBy: { startAt: 'asc' }, include: { day: true, assignments: { include: { person: true } } } } } } } },
+        areas: { include: { playbook: true, positions: { include: { shifts: { orderBy: { startAt: 'asc' }, include: { day: true, assignments: { include: { person: true } } } } } } } },
       },
     }),
     db.broadcastRecipient.findMany({ where: { orgId, personId: person.id, broadcast: { eventId: event.id } }, include: { broadcast: true }, orderBy: { broadcast: { createdAt: 'desc' } }, take: 10 }),
@@ -65,6 +67,17 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
       <p>Hi {firstName(person.name)}.{event.venue && ` ${event.venue}.`}</p>
       {done && DONE[done] && <p role="status">{DONE[done]}</p>}
       <Taps token={token} />
+      {event.status === 'closed' && (
+        <article>
+          <p><strong>Thank you for {event.name}.</strong></p>
+          {person.wantsBackAt ? <p>You are on the list for next time.</p> : (
+            <form method="post" action={act}>
+              <input type="hidden" name="kind" value="back" />
+              <button type="submit">Count me in next time</button>
+            </form>
+          )}
+        </article>
+      )}
       {assignments.length === 0 && leads.length === 0 && <p>You have no shifts on this event right now.</p>}
 
       {messages.filter((m) => m.broadcast.requiresAck && !m.ackedAt).map((m) => (
@@ -140,6 +153,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
             {aor.leadId === person.id ? `Deputy: ${aor.deputy?.name ?? 'none'}` : `Lead: ${aor.lead?.name ?? 'none'}`}
             {aor.radioChannel && ` · radio ${aor.radioChannel}`}
           </p>
+          {[['Breaks', event.breaks], ['Minors', event.minors], ['Moving people', event.moves]].filter(([, v]) => v).map(([k, v]) => <p key={k} className="pre"><strong>{k}:</strong> {v}</p>)}
           {event.status === 'closed' && <p><a href={`/p/${token}/review`}><strong>Review your crew</strong></a> (about three minutes): who showed, and what to fix next time.</p>}
           {aor.alerts.length > 0 && (
             <div>
@@ -177,6 +191,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
           {aor.areas.map((area) => (
             <div key={area.id}>
               <h3>{area.name}{area.location && ` · ${area.location}`}</h3>
+              {area.playbook && <details><summary>Playbook: equipment, checklists, what has gone wrong before</summary><PlaybookView playbook={area.playbook} /></details>}
               {area.positions.flatMap((pos) => pos.shifts.map((s) => {
                 const open = s.assignments.filter((x) => x.status !== 'released' && x.status !== 'declined');
                 const here = open.filter((x) => x.checkedInAt && !x.checkedOutAt).length;

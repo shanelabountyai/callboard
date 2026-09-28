@@ -1,9 +1,9 @@
 # NEXT
 
-> Foundation: on `v1.0.3` (branch `foundation-v1.0.3`, not on main yet: see "Ship phase 3"). `v1.1.0` (FR-06..11) was not
-> published on 2026-09-28. The `template` remote is SSH and fails host key verification in an unattended session: check and fetch with
-> `git ls-remote --tags https://github.com/shanelabountyai/saas-foundation.git`, then
-> `git fetch https://github.com/shanelabountyai/saas-foundation.git 'refs/tags/v1.1.0:refs/tags/v1.1.0'`.
+> **Pick up here: backlog 7, the foundation upgrade to `v1.1.0` (FR-06..11).** The tag was published by midday 2026-09-28
+> (`d422d1a`). Branch from `phase-3-slice-2`. The `template` remote is SSH and fails host key verification in an unattended
+> session, so fetch with `git fetch https://github.com/shanelabountyai/saas-foundation.git 'refs/tags/v1.1.0:refs/tags/v1.1.0'`.
+> Foundation today: `v1.0.3`, not on main yet (see "Ship phase 3").
 
 ## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
@@ -31,17 +31,66 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 3. ~~Phase 3, first slice~~ built 2026-09-27 on branch `phase-3` (below): card library, lead review, reliability tiers. **Not merged: see "Ship phase 3".**
 4. ~~Foundation upgrade to v1.0.2~~ merged 2026-09-28 on branch `foundation-v1.0.2`, stacked on `phase-3` (below). **Not on main: see "Ship phase 3".**
 5. ~~Foundation upgrade to v1.0.3~~ merged 2026-09-28 on branch `foundation-v1.0.3`, stacked on `foundation-v1.0.2` (below). **Not on main: see "Ship phase 3".**
-6. Phase 3, second slice (the rest of PRD 6 P0): post-event report, event templates with save-as-template, area playbooks, standard rules with per-event override, thank-you and come-back message. Then PRD 3 swaps.
+6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. **Not on main: see "Ship phase 3".**
+7. Foundation upgrade to v1.1.0 (FR-06..11). Published 2026-09-28.
+8. PRD 3 swaps: a person proposes a swap with a named colleague, both accept, the lead approves, the two assignments change hands in one transaction. Opus-class item: it adds writes to the no-login person page.
+9. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
 ## Ship phase 3 (Shane, in this order)
 The production database must get both migrations before main gets the code: main auto-deploys, and the new code selects columns
 (`Position.cardId`, `Event.closedAt`, `Person.tierOverride`, `BillingAccount.stripeSubscriptionId`) the old database does not have.
 Both migrations only add, so the code running in production today keeps working after step 1.
-1. `npm run db:migrate:prod` (applies `20260927000000_billing_subscription_id` and `20260927164228_phase3_consistency`)
-2. `git checkout main && git merge --ff-only foundation-v1.0.3 && git push` ships phase 3, the outbox fix and the v1.0.3 security
-   fixes together. To ship less, merge `phase-3` or `foundation-v1.0.2` instead; each is a fast-forward and the rest follows later.
-3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, and adds three closed past events so tiers
-   show in the demo. It is idempotent.
+1. `npm run db:migrate:prod` (applies `20260927000000_billing_subscription_id`, `20260927164228_phase3_consistency` and
+   `20260928120000_phase3_library`). All three only add.
+2. `git checkout main && git merge --ff-only phase-3-slice-2 && git push` ships both phase 3 slices, the outbox fix and the v1.0.3
+   security fixes together. To ship less, merge `phase-3`, `foundation-v1.0.2` or `foundation-v1.0.3` instead; each is a
+   fast-forward and the rest follows later.
+3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, adds three closed past events so tiers
+   show in the demo, and adds the Registration playbook, the house rules and the "Expo template". It is idempotent.
+
+## Phase 3, second slice 2026-09-28 (backlog 6)
+- **Standard rules** (`/o/[org]/rules`, nav "Rules"): ten rules in `src/lib/rules.ts`. Six are numbers that drive behaviour (no-show
+  grace, call offset, overbook %, minutes per escalation step for no-shows and for help, days out for the first reminder) and four
+  are text (breaks, minors, who can move whom, the thank-you). One `OrgRules` row per org, made on first read. An event holds its
+  own value of every rule: it starts on the standard, follows a change to the standard while it is being planned, and is frozen
+  once live or closed, the same rule as cards. "Deviates from standard" is "differs from the standard today", shown on the event
+  page, the events list and the rules page. Setting a value back to the standard makes the event follow again.
+- **Playbooks** (`/o/[org]/playbooks`): versioned exactly like cards. Linked per area on the event page, shown to the lead on their
+  roster with the three house rules above it.
+- **Templates** (`/o/[org]/templates`): a template is an `Event` row with `isTemplate`, so its editor is the event editor and
+  starting an event from it is the old duplicate path (`copyEvent` in `src/lib/templates.ts`). Save-as-template is on every event
+  page. Leads become slots, assignments never copy, cards and playbooks land on their latest version, the rule set rides along,
+  and `Event.templateId` records the source. A template cannot be given a status or be staffed.
+- **Report** (`/o/[org]/events/[id]/report`): built on read in `src/lib/report.ts`, nothing stored. Coverage per hour per area
+  against minimum and plan, no-show rate by pool and tier, help by category and by position, alerts by time to resolve, review
+  completion. It says "provisional" until every area is reviewed or waived.
+- **Thank-you**: the first close texts everyone who checked in, in the org's words, with their link. The person page shows
+  "Count me in next time" on a closed event; the tap stamps `Person.wantsBackAt`, and the Staff list puts those people first
+  within their tier.
+- **Defaults taken, all reversible, Shane to confirm**: any planner can change the standard rules (the audit log names who), the
+  same default as the card library; attendance bands are four fixed labels; a change to the standard moves planned events
+  silently, with the count in the audit log.
+- **Deviation from the PRD's data sketch**: the PRD lists a template as "structure JSON" and rules as key and value rows. Both are
+  typed columns instead, because that made the template editor and the rule checks free.
+- Skipped (add when asked): unreturned equipment (nothing checks equipment out, and the report says so), structured headcount by
+  hour in a playbook (it is lines of text), reordering the escalation chain (only its timing is a rule), a configurable day for
+  the pack (it is always the day before, as its text says), deleting a template or playbook, a SMS keyword for "count me in".
+- Behaviour change to know: `setEventDefaults` now takes any subset of the rules, and the first close sends thank-yous as well
+  as review links, in one transaction with a 60 s limit. Move the thank-yous to the cron if an event passes about 500 people.
+- Known ceiling in the report: each hour is read at its middle, so a gap shorter than an hour can hide.
+- Gate: lint and typecheck clean; vitest 161 of 161 (7 new in `tests/integration/callboard-library.test.ts`); e2e `callboard` +
+  `headers` 9 of 9 against a production build, run four times over to prove the spec resets its own data. The invariant harness
+  covers the five new actions; the fixture gained one playbook row for it.
+- Found on the way: a Playwright `getByLabel` with a loose match can hit the page being left. The event page's rules mention
+  "call time", so the run-of-show spec's `getByLabel('Time')` matched three inputs before the navigation landed. It is exact now,
+  and the new spec waits for the target page's heading before it fills anything.
+- Found on the way: anything the seed imports is loaded by Playwright too, which cannot resolve `next/navigation`. So
+  `src/lib/templates.ts` imports nothing from `next/*` and the actions do the "is it yours" check before calling it.
+- Found on the way: a read with several includes inside an interactive transaction makes Prisma run queries side by side on one
+  connection, which `pg` warns will stop working in version 9. `copyEvent` reads its source outside the transaction.
+- Environment: the first attempt at the gate sat behind other projects' sweeps for over an hour (load average 50 to 90, 16%
+  memory available, `rental_test` holding 39 connections). Every failure in that window was a timeout. After a reboot the full
+  vitest run took 63 s.
 
 ## Foundation v1.0.3 2026-09-28 (backlog 5)
 - Merged tag `v1.0.3` (FR-02..05) with no conflicts and no callboard change. Callboard has no custom `PaymentProvider`, and the

@@ -26,7 +26,8 @@ const daysOut = (callAt: Date) => {
 
 /** People come as checkboxes named `p:<personId>`, so the form can list the whole directory. */
 export const invite = orgAction(null, z.looseObject({ shiftId: ref('shift') }), async (ctx, i) => {
-  const shift = must(await db.shift.findFirst({ where: { id: i.shiftId, ...inOrg(ctx) }, include: { assignments: true } }));
+  const shift = must(await db.shift.findFirst({ where: { id: i.shiftId, ...inOrg(ctx) }, include: { assignments: true, event: { select: { isTemplate: true } } } }));
+  if (shift.event.isTemplate) throw new Refused('A template is never staffed. Start an event from it instead.');
   const personIds = Object.keys(i).filter((k) => k.startsWith('p:')).map((k) => k.slice(2)).filter((id) => z.uuid().safeParse(id).success);
   if (!personIds.length) throw new Refused('Tick at least one person.');
   const people = await db.person.findMany({ where: { id: { in: personIds }, ...inOrg(ctx) } });

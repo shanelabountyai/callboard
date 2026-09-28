@@ -10,7 +10,10 @@ const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 test.afterAll(() => db.end());
 test.beforeAll(async () => {
   await db.query('DELETE FROM "RateLimit"');
-  await db.query(`DELETE FROM "Event" WHERE name = 'Spring Expo'`); // a fresh expo every run; people are upserted
+  await db.query(`DELETE FROM "Event" WHERE name IN ('Spring Expo', 'Autumn Expo', 'Expo template')`); // a fresh expo every run; people are upserted
+  await db.query('DELETE FROM "Playbook"'); // the library test starts from the seeded library and the default rules
+  await db.query('DELETE FROM "OrgRules"');
+  await db.query('UPDATE "Person" SET "wantsBackAt" = NULL');
   await db.query('DELETE FROM "PositionCard"'); // the library back to version 1, so the phase 3 test can run twice
   await seedDemo();
   await seedCallboard();
@@ -54,7 +57,7 @@ test('invite from the staff page → SMS link → confirm without a login → pl
 test('run of show: an .xlsx import replaces imported rows and keeps a hand-added line', async ({ page }) => {
   await signInAsAcmeOwner(page);
   await page.getByRole('link', { name: 'Run of show' }).click();
-  await page.getByLabel('Time').fill('18:30');
+  await page.getByLabel('Time', { exact: true }).fill('18:30'); // exact: the event page's rules mention call time, and it is still on screen while this one loads
   await page.getByLabel('Cue').fill('Staff debrief');
   await page.getByRole('button', { name: 'Add line' }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Staff debrief' })).toContainText('manual');
@@ -194,4 +197,49 @@ test('after the event: the card reaches the person, tiers stay with planners, cl
 
   await page.reload();
   await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: /^Registration/ }) })).toContainText('Reviewed by Marcus Bell');
+});
+
+test('the library: a rule change marks what deviates, a template starts an event, the report and the thank-you follow a close', async ({ page, context }) => {
+  await signInAsAcmeOwner(page);
+  // Spring Expo is closed (the test above), so it keeps the grace it ran with and says so.
+  await page.getByRole('link', { name: 'Rules' }).click();
+  await expect(page.getByRole('heading', { name: 'Standard rules' })).toBeVisible();
+  await page.getByLabel(/^No-show grace/).fill('20');
+  await page.getByRole('button', { name: 'Save the standard' }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'Spring Expo' })).toContainText('No-show grace');
+  await expect(page.getByRole('row').filter({ hasText: 'Expo template' })).toHaveCount(0); // still planned: it followed
+
+  await page.getByRole('link', { name: 'Playbooks' }).click();
+  await expect(page.getByRole('heading', { name: /^Registration version 1/ })).toBeVisible();
+  await expect(page.getByRole('listitem').filter({ hasText: 'Printer 2 jams above 40 badges an hour' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Templates' }).click();
+  const tpl = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Expo template/ }) });
+  await expect(tpl).toContainText('250 to 1,000');
+  await tpl.getByLabel(/name/).fill('Autumn Expo');
+  await tpl.getByLabel('First day').fill('2027-10-01');
+  await tpl.getByRole('button', { name: 'Start an event from Expo template' }).click();
+  await expect(page.getByRole('heading', { name: 'Autumn Expo', level: 1 })).toBeVisible();
+  await expect(page.getByText('Rules for this event (all standard)')).toBeVisible();
+  await expect(page.getByText('Fri, Oct 1, Sat, Oct 2')).toBeVisible();
+  await expect(page.getByLabel('Playbook for Registration')).not.toHaveValue('');
+
+  // Tom checked in at the expo, so the close thanked him; one tap puts him first in his tier on the next event's list.
+  const { rows } = await db.query(`SELECT body FROM "CapturedMessage" WHERE "to" = '+15550100006' AND body LIKE '%counted in%' ORDER BY "createdAt" DESC LIMIT 1`);
+  const phone = await (await context.browser()!.newContext()).newPage();
+  await phone.goto(rows[0].body.match(/https?:\/\/\S+\/p\/[\w-]+/)![0]);
+  await phone.getByRole('button', { name: 'Count me in next time' }).click();
+  await expect(phone.getByRole('status')).toContainText('You are on the list for next time');
+  await page.getByRole('link', { name: 'Staff this event' }).click();
+  await expect(page.getByText(/Tom Alvarez.*asked to come back/).first()).toBeAttached(); // in the invite list, which is folded until opened
+
+  await page.getByRole('link', { name: 'Events' }).first().click();
+  await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Expo template' })).toHaveCount(0); // a template is not an event
+  await page.getByRole('link', { name: 'Spring Expo' }).click();
+  await page.getByRole('link', { name: 'Report', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Report: Spring Expo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Registration/ })).toBeVisible();
+  await expect(page.getByText(/Provisional: \d of \d areas have no review yet/)).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'volunteer' })).toBeVisible();
 });

@@ -56,6 +56,7 @@ export default async function Review({ params }: { params: Promise<{ org: string
               })}
             </tbody>
           </table>
+          <p><Link href={`/o/${ctx.slug}/events/${event.id}/report`}>The post-event report</Link> is built from check-in, alerts and these reviews.</p>
 
           {areas.map((area) => (
             <section key={area.id} className="stripe" style={stripe(area.aor?.color)}>

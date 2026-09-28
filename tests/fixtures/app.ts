@@ -9,7 +9,7 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
   const ID = (k: number) => `00000000-0000-4000-8000-${String(n + k).padStart(12, '0')}`;
   const orgId = org.orgId;
   const t = now();
-  const ids = { person: ID(1), event: ID(2), eventDay: ID(3), aor: ID(4), area: ID(5), position: ID(6), shift: ID(7), assignment: ID(8), runOfShowRow: ID(10), alert: ID(11), broadcast: ID(12), positionCard: ID(13) };
+  const ids = { person: ID(1), event: ID(2), eventDay: ID(3), aor: ID(4), area: ID(5), position: ID(6), shift: ID(7), assignment: ID(8), runOfShowRow: ID(10), alert: ID(11), broadcast: ID(12), positionCard: ID(13), playbook: ID(14) };
   const lead = ID(9);
   await db.person.create({ data: { id: ids.person, orgId, name: `Person ${key}`, mobile: `+1555000${n}`, kind: 'volunteer' } });
   await db.person.create({ data: { id: lead, orgId, name: `Lead ${key}`, mobile: `+1555001${n}`, kind: 'employee' } });
@@ -20,6 +20,7 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
   await db.aor.create({ data: { id: ids.aor, orgId, eventId: ids.event, name: 'Front of house', leadId: lead } });
   await db.area.create({ data: { id: ids.area, orgId, eventId: ids.event, aorId: ids.aor, name: 'Registration' } });
   await db.positionCard.create({ data: { id: ids.positionCard, orgId, key: 'greeter', version: 1, title: 'Greeter', changedBy: org.userId } });
+  await db.playbook.create({ data: { id: ids.playbook, orgId, key: 'registration', version: 1, title: 'Registration', changedBy: org.userId } });
   await db.position.create({ data: { id: ids.position, orgId, eventId: ids.event, areaId: ids.area, name: 'Greeter', minHeadcount: 1, targetHeadcount: 2 } });
   const startAt = new Date(date.getTime() + 14 * 3_600_000);
   await db.shift.create({

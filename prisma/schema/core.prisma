@@ -101,6 +101,8 @@ model Org {
   positionCards  PositionCard[] // app
   reviews        Review[] // app
   areaReviews    AreaReview[] // app
+  playbooks      Playbook[] // app
+  orgRules       OrgRules? // app
 }
 
 model Membership {

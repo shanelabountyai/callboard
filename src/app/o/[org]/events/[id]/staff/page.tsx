@@ -27,7 +27,7 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
   if (!event) notFound();
   const tiers = await tiersFor(ctx.orgId);
   // Most reliable first, so the 7am openers get filled from the top of the list (PRD 3).
-  const people = (await db.person.findMany({ where: inOrg(ctx), orderBy: { name: 'asc' } })).map((p) => ({ ...p, tier: shownTier(p, tiers) })).sort((a, b) => a.tier.tier - b.tier.tier);
+  const people = (await db.person.findMany({ where: inOrg(ctx), orderBy: { name: 'asc' } })).map((p) => ({ ...p, tier: shownTier(p, tiers) })).sort((a, b) => a.tier.tier - b.tier.tier || Number(!!b.wantsBackAt) - Number(!!a.wantsBackAt)); // within a tier, the people who asked to come back (PRD 6)
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const tz = event.timezone;
   const all = event.days.flatMap((d) => d.shifts.flatMap((s) => s.assignments));
@@ -79,7 +79,7 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
                     <div className="columns">
                       {people.filter((p) => !onShift.has(p.id)).map((p) => (
                         <label key={p.id}>
-                          <input type="checkbox" name={`p:${p.id}`} /> {p.name} <TierPill t={p.tier} /> <small>({p.kind}{p.department && `, ${p.department}`})</small>
+                          <input type="checkbox" name={`p:${p.id}`} /> {p.name} <TierPill t={p.tier} /> <small>({p.kind}{p.department && `, ${p.department}`}{p.wantsBackAt && `, asked to come back ${fmtDay(p.wantsBackAt, tz)}`})</small>
                         </label>
                       ))}
                     </div>

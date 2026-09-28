@@ -10,7 +10,8 @@ import { AOR_HEX } from '@/lib/colors';
 import { ensurePersonLink } from '@/lib/links';
 import { notify } from '@/lib/messages';
 import { must } from '@/lib/refuse';
-import { openReviews } from '@/lib/review';
+import { openReviews, sendThanks } from '@/lib/review';
+import { ruleShapeOptional } from '@/lib/rules';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { isHm, ymd, zonedToUtc } from '@/lib/time';
 
@@ -22,12 +23,14 @@ const int = (min: number, msg: string) => z.coerce.number().int().min(min, msg);
 export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.enum(['draft', 'staffing', 'confirmed', 'live', 'closed']) }), async (ctx, i) => {
   const event = must(await db.event.findFirst({ where: { id: i.id, ...inOrg(ctx) } }));
   // The first close starts the review (PRD 6): leads get their link. Reopening and closing again does not text them twice.
+  if (event.isTemplate) throw new Refused('A template is never staffed or run. Start an event from it instead.');
   const firstClose = i.status === 'closed' && !event.closedAt;
   await db.$transaction(async (tx) => {
     await tx.event.update({ where: { id: event.id }, data: { status: i.status } });
     if (firstClose) await openReviews(tx, event);
+    if (firstClose) await sendThanks(tx, event);
     await audit(ctx, 'event.status', { targetType: 'event', targetId: i.id, data: { status: i.status } }, tx);
-  });
+  }, { timeout: 60_000 });
   if (firstClose) await drainOutbox(25);
   redirect(i.status === 'closed' ? `${page(ctx, i.id)}/review` : page(ctx, i.id));
 });
@@ -45,14 +48,25 @@ export const setPositionCard = orgAction(null, z.object({ id: ref('position'), c
   redirect(page(ctx, p.eventId));
 });
 
+/** This event's own rules (PRD 6) and its emergency contact. A rule left out of the form stays as it is. */
 export const setEventDefaults = orgAction(
   null,
-  z.object({ id: ref('event'), callOffsetMin: int(0, 'Call offset cannot be negative.'), graceMin: int(0, 'Grace cannot be negative.'), emergencyContact: z.string().trim().max(200).default('') }),
-  async (ctx, i) => {
-    await db.event.update({ where: { id: i.id, ...inOrg(ctx) }, data: { callOffsetMin: i.callOffsetMin, graceMin: i.graceMin, emergencyContact: i.emergencyContact } }).catch(notFoundOnP2025);
-    redirect(page(ctx, i.id));
+  z.object({ id: ref('event'), ...ruleShapeOptional(), emergencyContact: z.string().trim().max(200).optional() }),
+  async (ctx, { id, ...data }) => {
+    await db.event.update({ where: { id, ...inOrg(ctx) }, data }).catch(notFoundOnP2025);
+    await audit(ctx, 'event.rules', { targetType: 'event', targetId: id, data: { set: Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined) } });
+    redirect(page(ctx, id));
   },
 );
+
+/** Links an area to the latest version of a library playbook, or unlinks it. */
+export const setAreaPlaybook = orgAction(null, z.object({ id: ref('area'), playbookId: optionalRef('playbook') }), async (ctx, i) => {
+  const area = must(await db.area.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { eventId: true } }));
+  const picked = i.playbookId ? must(await db.playbook.findFirst({ where: { id: i.playbookId, ...inOrg(ctx) }, select: { key: true } })) : null;
+  const latest = picked && (await db.playbook.findFirstOrThrow({ where: { ...inOrg(ctx), key: picked.key }, orderBy: { version: 'desc' }, select: { id: true } }));
+  await db.area.update({ where: { id: i.id, ...inOrg(ctx) }, data: { playbookId: latest?.id ?? null } });
+  redirect(page(ctx, area.eventId));
+});
 
 export const addAor = orgAction(
   null,

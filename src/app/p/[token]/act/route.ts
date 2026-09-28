@@ -14,7 +14,7 @@ import { drainOutbox } from '@/modules/notifications/outbox';
 // an AoR you lead), ask for help, acknowledge a message, resolve or release a no-show. A POST, same
 // origin, from the link's own page; JSON from taps.tsx or a plain form without JavaScript.
 const Body = z.object({
-  kind: z.enum(['checkin', 'checkout', 'help', 'ack', 'resolve', 'release']),
+  kind: z.enum(['checkin', 'checkout', 'help', 'ack', 'resolve', 'release', 'back']),
   assignment: z.uuid().optional(),
   alert: z.uuid().optional(),
   recipient: z.uuid().optional(),
@@ -64,6 +64,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     await db.$transaction((tx) => raiseHelp(tx, { ...person, orgId }, event.id, a, category, i.note ?? ''));
     await drainOutbox(5);
     return reply(200, undefined, 'help');
+  }
+
+  // "Count me in next time" on the thank-you (PRD 6): about the person, not the event, so it outlives this link.
+  if (i.kind === 'back') {
+    await db.person.update({ where: { id: person.id }, data: { wantsBackAt: t } });
+    await audit({ orgId, userId: null }, 'person.wants_back', { targetType: 'person', targetId: person.id, data: { eventId: event.id } });
+    return reply(200, undefined, 'back');
   }
 
   if (i.kind === 'ack') {

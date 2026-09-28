@@ -162,6 +162,26 @@ export async function openReviews(tx: Tx, event: { id: string; orgId: string; na
   return told.size;
 }
 
+export const THANKS = 'Thank you for your work at {event}, {name}. It went well because you were there.';
+export const THANKS_LINK_MS = 30 * 86_400_000; // how long "count me in next time" stays open
+
+/**
+ * First close: thank everyone who checked in, once each, with the link where "count me in next time" waits.
+ * ponytail: runs inside the close's transaction, a few queries per person. Move it to the cron in batches
+ * if an event ever has more than about 500 people on the floor.
+ */
+export async function sendThanks(tx: Tx, event: { id: string; orgId: string; name: string; thanks: string }) {
+  const scope = { orgId: event.orgId, eventId: event.id };
+  const worked = await tx.person.findMany({ where: { orgId: event.orgId, assignments: { some: { ...scope, checkedInAt: { not: null } } } } });
+  const expires = new Date(now().getTime() + THANKS_LINK_MS);
+  for (const p of worked) {
+    const url = await ensurePersonLink(tx, { ...scope, personId: p.id }, expires);
+    const text = (event.thanks.trim() || THANKS).replaceAll('{name}', firstName(p.name)).replaceAll('{event}', event.name);
+    await notify(tx, event.orgId, p, 'cb_thanks', { event: event.name, text, url });
+  }
+  return worked.length;
+}
+
 /** The cron's part: a week after the close, ask the planners once to finish or waive whatever is still open. */
 export async function runReviewAsks(): Promise<{ asked: number }> {
   const t = now();

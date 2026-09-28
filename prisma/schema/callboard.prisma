@@ -44,6 +44,7 @@ model Person {
   smsOptOut   Boolean      @default(false)
   tierOverride Int? // 1..3 set by hand; null = the tier computed from history (src/lib/review.ts)
   tierNote    String       @default("") // why it was set by hand; never rendered on the person's own page
+  wantsBackAt DateTime?    @db.Timestamptz(6) // tapped "count me in next time" on a thank-you (PRD 6); the Staff list puts them first
   createdAt   DateTime     @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime     @updatedAt @db.Timestamptz(6)
   assignments Assignment[]
@@ -70,6 +71,22 @@ model Event {
   emergencyContact String      @default("") // venue security / medical; shown first on a medical or security help request
   closedAt      DateTime?      @db.Timestamptz(6) // first time the status became closed; the review clock starts here (PRD 6)
   reviewAskedAt DateTime?      @db.Timestamptz(6) // the planner was asked to finish or waive the reviews still open after 7 days
+  // The rest of the rule set (PRD 6, src/lib/rules.ts). An event holds its own value of every rule: it starts as
+  // the org's standard, follows a change to the standard while it is being planned, and is frozen once live.
+  overbookPct   Int            @default(20) // the default for new shifts
+  stepMin       Int            @default(10) // a no-show alert waits this long at each step of the chain
+  helpStepMin   Int            @default(5)
+  nudgeDays     Int            @default(7) // the first reminder to the unconfirmed; the pack is always the day before
+  breaks        String         @default("")
+  minors        String         @default("")
+  moves         String         @default("") // who can move whom
+  thanks        String         @default("") // the thank-you sent at close; blank = the built-in one
+  // An event template (PRD 6) is an event nobody staffs: the same editor, copied into each event started from it.
+  isTemplate    Boolean        @default(false)
+  attendanceBand String        @default("")
+  templateId    String?        @db.Uuid // the template this event was started from; a copy, never a link
+  template      Event?         @relation("StartedFrom", fields: [templateId], references: [id], onDelete: SetNull)
+  startedFrom   Event[]        @relation("StartedFrom")
   createdAt     DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
   days          EventDay[]
@@ -130,10 +147,13 @@ model Area {
   aor       Aor?       @relation(fields: [aorId], references: [id], onDelete: SetNull)
   name      String
   location  String     @default("")
+  playbookId String?   @db.Uuid // one version of a library playbook; repointed like a card while the event is planned
+  playbook  Playbook?  @relation(fields: [playbookId], references: [id], onDelete: SetNull)
   positions Position[]
   review    AreaReview?
 
   @@index([eventId])
+  @@index([playbookId])
 }
 
 model Position {
@@ -367,4 +387,46 @@ model AreaReview {
   at           DateTime @db.Timestamptz(6)
 
   @@index([eventId])
+}
+
+/// The area playbook library (PRD 6): how an area is run, written once and reused. Versioned like a card.
+model Playbook {
+  id            String   @id @default(uuid()) @db.Uuid
+  orgId         String   @db.Uuid
+  org           Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key           String
+  version       Int
+  title         String
+  // ponytail: staffing is one line per position and hour ("Greeter 8 to 9am: min 6, target 8"), read by people.
+  // Make it rows when proposed edits (PRD 6 P1) need to change a number.
+  staffing      String   @default("")
+  callOffsetMin Int? // planner-facing; blank = the event's
+  breakPlan     String   @default("")
+  floatPlan     String   @default("")
+  equipment     String   @default("") // one per line
+  setup         String   @default("") // checklist, one per line
+  close         String   @default("") // checklist, one per line
+  failurePoints String   @default("") // known failure points, one per line
+  changedBy     String   @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  areas         Area[]
+
+  @@unique([orgId, key, version])
+}
+
+/// The org's standard rules (PRD 6): one row per org, made with the defaults the first time it is read.
+model OrgRules {
+  orgId         String   @id @db.Uuid
+  org           Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  graceMin      Int      @default(15)
+  callOffsetMin Int      @default(45)
+  overbookPct   Int      @default(20)
+  stepMin       Int      @default(10)
+  helpStepMin   Int      @default(5)
+  nudgeDays     Int      @default(7)
+  breaks        String   @default("")
+  minors        String   @default("")
+  moves         String   @default("")
+  thanks        String   @default("")
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
 }

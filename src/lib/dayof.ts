@@ -13,7 +13,8 @@ import { fmtTime } from './time';
 export type Method = 'lead' | 'self' | 'sms' | 'planner';
 export const EARLY_MS = 3 * 3_600_000; // a check-in this long before call time is probably a mistake
 export const AUTO_CLOSE_MS = 60 * 60_000; // an unclosed assignment is closed this long after shift end, flagged
-export const ESCALATE_MS: Record<AlertKind, number> = { no_show: 10 * 60_000, help: 5 * 60_000 };
+/** How long an open alert waits at each step of the chain: the event's rule (PRD 6), 10 minutes and 5 for help by default. */
+export const stepMinOf = (al: { kind: AlertKind; event: { stepMin: number; helpStepMin: number } }) => (al.kind === 'no_show' ? al.event.stepMin : al.event.helpStepMin);
 const LIVE = { status: { in: ['staffing', 'confirmed', 'live'] as EventStatus[] } };
 type Tx = Prisma.TransactionClient;
 type Chain = { lead: { id: string } | null; deputy: { id: string } | null } | null | undefined;
@@ -122,14 +123,14 @@ export async function runDayOf(): Promise<{ noShows: number; escalated: number; 
   }
 
   const stale = await db.alert.findMany({ where: { resolvedAt: null, step: { lt: 2 } }, include: { aor: { include: { lead: true, deputy: true } }, person: true, event: true, assignment: { include: { shift: { include: { position: true } } } } } });
-  for (const al of stale.filter((al) => al.steppedAt.getTime() + ESCALATE_MS[al.kind] <= t.getTime())) {
+  for (const al of stale.filter((al) => al.steppedAt.getTime() + stepMinOf(al) * 60_000 <= t.getTime())) {
     const step = nextStep(al.aor, al.step);
     await db.$transaction(async (tx) => {
       await tx.alert.update({ where: { id: al.id }, data: { step, steppedAt: t } });
       const where = al.assignment ? `${al.assignment.shift.position.name}` : 'no shift';
       const data: Record<string, string> = al.kind === 'no_show'
-        ? { event: al.event.name, list: `${al.person.name} (${where}, unresolved ${ESCALATE_MS.no_show / 60_000} min)`, count: '1' }
-        : { event: al.event.name, name: al.person.name, where, category: al.category, note: `${al.note} (unanswered ${ESCALATE_MS.help / 60_000} min)` };
+        ? { event: al.event.name, list: `${al.person.name} (${where}, unresolved ${stepMinOf(al)} min)`, count: '1' }
+        : { event: al.event.name, name: al.person.name, where, category: al.category, note: `${al.note} (unanswered ${stepMinOf(al)} min)` };
       await tell(tx, al.id, al.aor, step, al.kind === 'no_show' ? 'cb_noshow' : 'cb_help', data, al.orgId, al.eventId);
     });
     escalated++;
