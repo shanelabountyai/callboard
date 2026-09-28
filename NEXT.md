@@ -1,11 +1,9 @@
 # NEXT
 
-> **Foundation upgrade waiting: `v1.0.3` (security, take by 2026-10-04)** — FR-02..05: pending-MFA 10-min TTL + daily wrong-code cap,
-> invite send caps, org bound to one Stripe subscription (checkout refused while live), org deletion cancels the subscription first.
-> `git merge v1.0.3` (the tag is already fetched), then **`npm run db:migrate`** (adds `BillingAccount.stripeSubscriptionId`; migrate prod
-> before the code reaches main). New clone-owned `src/app/org-hooks.ts`; a custom `PaymentProvider` needs `cancel()`. v1.1.0 (FR-06..11) follows.
-> The `template` remote is SSH and fails host key verification in an unattended session: fetch tags with
-> `git fetch https://github.com/shanelabountyai/saas-foundation.git 'refs/tags/v1.0.3:refs/tags/v1.0.3'`.
+> Foundation: on `v1.0.3` (branch `foundation-v1.0.3`, not on main yet: see "Ship phase 3"). `v1.1.0` (FR-06..11) was not
+> published on 2026-09-28. The `template` remote is SSH and fails host key verification in an unattended session: check and fetch with
+> `git ls-remote --tags https://github.com/shanelabountyai/saas-foundation.git`, then
+> `git fetch https://github.com/shanelabountyai/saas-foundation.git 'refs/tags/v1.1.0:refs/tags/v1.1.0'`.
 
 ## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
@@ -32,18 +30,35 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 2. ~~Apply the design~~ done 2026-09-26, built straight from the design brief (below).
 3. ~~Phase 3, first slice~~ built 2026-09-27 on branch `phase-3` (below): card library, lead review, reliability tiers. **Not merged: see "Ship phase 3".**
 4. ~~Foundation upgrade to v1.0.2~~ merged 2026-09-28 on branch `foundation-v1.0.2`, stacked on `phase-3` (below). **Not on main: see "Ship phase 3".**
-5. Foundation upgrade to v1.0.3 (the note at the top of this file). Security, take by 2026-10-04. It has a migration, so it follows the same deploy order as phase 3.
+5. ~~Foundation upgrade to v1.0.3~~ merged 2026-09-28 on branch `foundation-v1.0.3`, stacked on `foundation-v1.0.2` (below). **Not on main: see "Ship phase 3".**
 6. Phase 3, second slice (the rest of PRD 6 P0): post-event report, event templates with save-as-template, area playbooks, standard rules with per-event override, thank-you and come-back message. Then PRD 3 swaps.
 
 ## Ship phase 3 (Shane, in this order)
-The production database must get the migration before main gets the code: main auto-deploys, and the new code selects columns
-(`Position.cardId`, `Event.closedAt`, `Person.tierOverride`) the old database does not have. The migration only adds, so the code
-running in production today keeps working after step 1.
-1. `npm run db:migrate:prod` (applies `20260927164228_phase3_consistency`)
-2. `git checkout main && git merge --ff-only foundation-v1.0.2 && git push` ships phase 3 and the outbox fix together (v1.0.2 has no
-   migration). To ship phase 3 alone, merge `phase-3` instead and `foundation-v1.0.2` later.
+The production database must get both migrations before main gets the code: main auto-deploys, and the new code selects columns
+(`Position.cardId`, `Event.closedAt`, `Person.tierOverride`, `BillingAccount.stripeSubscriptionId`) the old database does not have.
+Both migrations only add, so the code running in production today keeps working after step 1.
+1. `npm run db:migrate:prod` (applies `20260927000000_billing_subscription_id` and `20260927164228_phase3_consistency`)
+2. `git checkout main && git merge --ff-only foundation-v1.0.3 && git push` ships phase 3, the outbox fix and the v1.0.3 security
+   fixes together. To ship less, merge `phase-3` or `foundation-v1.0.2` instead; each is a fast-forward and the rest follows later.
 3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, and adds three closed past events so tiers
    show in the demo. It is idempotent.
+
+## Foundation v1.0.3 2026-09-28 (backlog 5)
+- Merged tag `v1.0.3` (FR-02..05) with no conflicts and no callboard change. Callboard has no custom `PaymentProvider`, and the
+  new clone-owned `src/app/org-hooks.ts` is taken as shipped.
+- What changes for users: a sign-in waiting on its TOTP code dies after 10 minutes and 20 wrong codes a day ends it; member invites
+  are capped at 50 a day per sender, 100 per org and 5 per address; checkout is refused while the org has a live subscription;
+  deleting an org cancels its subscription first and is refused if the cancel fails. Staff invites by SMS do not go through
+  `createInvite`, so the caps do not touch them.
+- Migration order: `20260927000000_billing_subscription_id` sorts before phase 3's migration, which the local databases already
+  had. `prisma migrate deploy` applies it out of order without complaint, and both local databases were migrated that way.
+  **`npm run db:migrate` (`prisma migrate dev`) may ask to reset a database that has phase 3 but not this one: use
+  `npx dotenv -e .env.local -- prisma migrate deploy` instead.** Production has neither yet, so it gets both in order.
+- Gate: lint and typecheck clean; vitest 154 of 154 (8 new from the foundation); e2e `billing`, `login`, `callboard` and `headers`
+  11 of 11 against a production build.
+- Environment: the first vitest run failed 3 tests in `inv-09-rate-limits` while another project's vitest ran (load average 35,
+  the run took 461 s). The new invite cap test sends 100 invites and passed its 20 s timeout; the two failures after it were a
+  deadlock with the timed-out test still writing. Alone the test takes 6 s, and the rerun at load 19 passed in 165 s.
 
 ## Foundation v1.0.2 2026-09-28 (backlog 4)
 - Merged tag `v1.0.2` (FR-01). The outbox claims a row in a short transaction, counts the attempt and leases it for 2 minutes, then
