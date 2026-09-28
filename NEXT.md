@@ -1,7 +1,9 @@
 # NEXT
 
-> **Pick up here: nothing is queued.** Availability and the Preview switch-off shipped to main and production on 2026-09-28
-> (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
+> **Pick up here: finish the move to callboard.labintelligence.co** (section below; branch `subdomain-gate`, PR #2). It
+> waits on two things from Shane: the Cloudflare record, and the password pasted into `.env.production.local`.
+> **Do not merge PR #2 before `DEMO_ACCESS_PASSWORD` is in Vercel production: the gate fails closed and every page answers 503.**
+> Availability and the Preview switch-off shipped to main and production on 2026-09-28 (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
 > Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
 > await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
 > `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`, on main.
@@ -48,6 +50,37 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 - The v1.1.1 security fixes were due on main by 2026-10-05: met. Everyone signed in was signed out once (cookie renamed).
 - The six stacked branches are all contained in main and still exist locally and on origin. Delete them when convenient.
 - ~~Open: failing Preview builds~~ and ~~open: availability~~: both decided and built the same day, next section.
+
+## Move to callboard.labintelligence.co, behind a shared password 2026-09-28 (in progress)
+- **Decided by Shane 2026-09-28**: the subdomain is `callboard` (over `staffing`), and the site sits behind a shared password
+  like rent and showcall (over open with texts off, and over open as it is). Neither is to be asked again.
+- **No new database and no data load**: Neon project `callboard` already holds the demo (`seed:prod`, 2026-09-28).
+- **Why a password**: `/demo` signs anyone in as an owner, and an owner can add any mobile number and text it on the Twilio
+  account. Not tested: whether `DEMO_MODE` limits sends.
+- **The gate** (`src/proxy.ts`, logic in `src/lib/demo-gate.ts`, brought across from showcall): HTTP Basic, any username,
+  against `DEMO_ACCESS_PASSWORD`, compared in constant time. On Vercel a missing password fails closed with a 503; off Vercel
+  there is no gate, so dev, vitest and e2e are unchanged. Open without the password: `/p/*` (the link token), `/api/sms/inbound`
+  (Twilio's signature), `/api/cron` (`CRON_SECRET`), `/api/webhooks/stripe` (Stripe's signature), and static files with `/sw.js`.
+  Share links (`/s/*`) and `/api/health` are behind it.
+- `DEMO_ACCESS_PASSWORD` is read from `process.env`, not `@/core/env`, and is not in `.env.example`: the template owns the schema
+  and INV-14 holds `.env.example` to exactly its keys. `src/proxy.ts` is a template-owned path, so it is listed in
+  `FOUNDATION_PATCHES.md`. A gate for demo deployments should go upstream.
+- Checked against a production build served locally with a test password: 401 with no or a wrong password on `/`, `/demo`,
+  `/login`, `/o/acme/events`, `/api/health`, `/s/abc`; 200 with the right one; `/p/<unknown>` 404, `/sw.js` 200, the webhooks
+  and the cron answer with their own refusals; with `VERCEL=1` and no password, `/` is 503 and `/p/<unknown>` still 404.
+- Gate so far: lint and typecheck clean; `tests/unit/demo-gate.test.ts` 3 of 3; `foundation:drift` clean. The full vitest run
+  was not trusted locally: at load average 35 (other projects' sweeps) five invariant controls timed out at 20 s and one
+  deadlocked, the pattern recorded under swaps below. CI on the pull request is the full run.
+- Done: the domain is added to the Vercel project (it reports "not configured" until DNS exists).
+- **Left, in this order**:
+  1. Shane: Cloudflare, CNAME `callboard` to `cname.vercel-dns.com`, DNS only (grey cloud).
+  2. Shane: paste the password after `DEMO_ACCESS_PASSWORD=` in `.env.production.local` (gitignored).
+  3. Push it to Vercel production without printing it, and set `APP_URL` to `https://callboard.labintelligence.co`.
+  4. `scripts/deploy-twilio.sh` (its default `APP_URL` is already the new address) to re-point the SMS webhook. Twilio signs
+     over the exact URL, so between steps 3 and 5 inbound texts are refused.
+  5. Merge PR #2 (the code push that redeploys), then check: 401 without the password, 200 with it, `/p` open, the cron green.
+  6. Port table row in `~/.claude/CLAUDE.md`, and this section.
+- `callboard-ten.vercel.app` keeps working and is behind the same password. Links already texted point at it and stay valid.
 
 ## Availability and Preview builds 2026-09-28 (backlog 9)
 - **Decided by Shane 2026-09-28**: build availability (over closing the project or PRD 6 P1), and skip Preview builds (over
