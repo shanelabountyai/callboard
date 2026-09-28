@@ -1,11 +1,8 @@
 # NEXT
 
-> **Pick up here: finish the move to callboard.labintelligence.co** (section below). The password gate is live on
-> `callboard-ten.vercel.app` (PR #2, merged 2026-09-28). The move itself waits on the Cloudflare record: on 2026-09-28
-> Cloudflare's own nameservers answered NXDOMAIN for `callboard.labintelligence.co`. Check with
-> `dig +short callboard.labintelligence.co @kobe.ns.cloudflare.com` before doing anything else.
-> Checked again later on 2026-09-28: still NXDOMAIN, and no near-miss name resolves either (`calboard`, `staffing`,
-> the doubled zone). The record Vercel asks for is `A callboard 76.76.21.21`, DNS-only, the same as showcall's.
+> **Nothing is in flight.** Callboard is live at https://callboard.labintelligence.co behind the shared password
+> (moved 2026-09-28, section below). The backlog is empty until item 10 is asked for, so the next thing to raise is
+> closure: `docs/DEMO.md`, the exec brief, the LinkedIn posts and the cost review (the cron runs every 5 minutes).
 > Availability and the Preview switch-off shipped to main and production on 2026-09-28 (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
 > Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
 > await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
@@ -54,7 +51,27 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 - The six stacked branches are all contained in main and still exist locally and on origin. Delete them when convenient.
 - ~~Open: failing Preview builds~~ and ~~open: availability~~: both decided and built the same day, next section.
 
-## Move to callboard.labintelligence.co, behind a shared password 2026-09-28 (gate live, move waits on DNS)
+## Moved to callboard.labintelligence.co 2026-09-28
+- **DNS**: `A callboard 76.76.21.21`, DNS-only, in Cloudflare (saved 22:39 UTC, answered from 22:50). Vercel serves both
+  addresses from one production deployment, each with a valid certificate.
+- **What the delay was**: the first record was a CNAME saved backwards (name `cname.vercel-dns.com`, target `callboard`), so
+  the name never existed; Shane deleted it. After the A record was saved, Cloudflare's nameservers went on answering
+  NXDOMAIN for the A type for about 11 minutes while every other type already answered "exists, no data". A made-up name
+  answered NXDOMAIN for all types. **To tell "not saved" from "not out yet", ask for TXT as well as A.**
+- **Order it ran in**: `APP_URL` in Vercel production, then `scripts/deploy-twilio.sh` with the new address (both run by
+  Shane in his terminal), then the push of `b1c5479`, which moved the script's default and was the redeploy.
+- **Checked on the new address**: `/`, `/demo`, `/login`, `/api/health`, `/s/abc` answer 401 with no or a wrong password
+  and 200 with the right one; `/p/<unknown>` 404; `/sw.js` 200; `/api/sms/inbound` 405 on a GET and 403 on an unsigned
+  POST; `/api/cron` 401 without its secret. Twilio's number reports its SMS webhook as the new address.
+  `callboard-ten.vercel.app` answers 401 without the password and 200 with it.
+- **Not checked**: a real inbound text. Nothing signed by Twilio has been posted to the new address, so text YES to the
+  number once before relying on it. `CRON_SECRET` is only in Vercel, so the cron was read from the logs, not called.
+- **Permissions in this environment**: the auto mode classifier refuses DNS changes and `vercel env` writes from a session.
+  Reading the Cloudflare zone with `CLOUDFLARE_API_TOKEN` (in the shell environment, DNS edit scope) is allowed.
+- **Left in the zone, not touched**: four rows from June that look mistyped (`labintelligenc.coarecrod` twice, `aname`,
+  `aname2`).
+
+## The demo gate 2026-09-28 (how it was built; the move above is finished)
 - **Decided by Shane 2026-09-28**: the subdomain is `callboard` (over `staffing`), and the site sits behind a shared password
   like rent and showcall (over open with texts off, and over open as it is). Neither is to be asked again.
 - **No new database and no data load**: Neon project `callboard` already holds the demo (`seed:prod`, 2026-09-28).
@@ -78,15 +95,7 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 - **Gate shipped 2026-09-28**: `DEMO_ACCESS_PASSWORD` is in Vercel production (sensitive) and in `.env.production.local`.
   PR #2 merged, deployment `callboard-694l7ryqe` Ready. On `callboard-ten.vercel.app`: `/`, `/demo`, `/login`, `/api/health`
   answer 401 with no or a wrong password and 200 with the right one; `/p/<unknown>` 404, `/sw.js` 200, `/api/sms/inbound` 405
-  on a GET, `/api/cron` its own 401. `APP_URL` and the Twilio webhook are unchanged, so texts work as before.
-- **Left, in this order, once the name resolves**:
-  1. `APP_URL` in Vercel production to `https://callboard.labintelligence.co`.
-  2. `APP_URL=https://callboard.labintelligence.co scripts/deploy-twilio.sh` to re-point the SMS webhook. Twilio signs over
-     the exact URL, so between steps 1 and 3 inbound texts are refused.
-  3. A code push to redeploy: change the default `APP_URL` in `scripts/deploy-twilio.sh` to the new address (held back for
-     this, since an env-only redeploy is skipped).
-  4. Check the new address: 401 without the password, 200 with it, `/p` open, the cron green.
-  5. Port table row in `~/.claude/CLAUDE.md`, and this section.
+  on a GET, `/api/cron` its own 401.
 - `callboard-ten.vercel.app` keeps working and is behind the same password. Links already texted point at it and stay valid.
 
 ## Availability and Preview builds 2026-09-28 (backlog 9)
