@@ -7,7 +7,7 @@ S=${VERCEL_SCOPE:-shanelabountyai-8212s-projects}
 get() { grep -E "^$1=" .env.production.local | head -1 | cut -d= -f2- | tr -d '\r\n' | sed -E 's/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/'; } # quotes, if pasted, are not part of the value
 SID=$(get TWILIO_ACCOUNT_SID); TOKEN=$(get TWILIO_AUTH_TOKEN); FROM=$(get TWILIO_FROM)
 [ -n "$SID" ] && [ -n "$TOKEN" ] && [ -n "$FROM" ] || { echo "Fill TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM (E.164, e.g. +15551234567) in .env.production.local first."; exit 1; }
-APP_URL=${APP_URL:-https://callboard.labintelligence.co} # production (NEXT.md); override with APP_URL=... if it moves
+APP_URL=${APP_URL:-https://callboard-ten.vercel.app} # the production alias (NEXT.md); override with APP_URL=... if it moves
 
 for k in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM; do
   vercel env rm "$k" production --yes --scope "$S" >/dev/null 2>&1 || true
