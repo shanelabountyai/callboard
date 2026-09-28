@@ -6,7 +6,8 @@ template's release check that both modules can be deleted, and Callboard sends e
 (`src/lib/messages.ts`, `src/lib/broadcast.ts`, `src/app/api/sms/inbound/route.ts`, the event actions), so it cannot hold here.
 - **Decision (Shane, 2026-09-28): fix it upstream first.** Not taken: narrowing `MODULES` in `scripts/foundation-modules.ts` here
   (a local patch to carry at every upgrade), and dropping the job from `ci.yml` (loses the billing half of the check).
-- **Request for saas-foundation:** a clone declares a module required in a clone-owned file, the way `cron-jobs.ts` and
+- **Request for saas-foundation (filed 2026-09-28 as F-03 in its `BACKLOG.md`, with a pointer at the top of its `NEXT.md`;
+  both left uncommitted there for its own session to commit):** a clone declares a module required in a clone-owned file, the way `cron-jobs.ts` and
   `org-hooks.ts` are clone-owned. `foundation:check-modules` leaves a required module in place and still removes the rest.
   Done when Callboard, with notifications required, passes `check-modules` with billing removed.
 - Not verified: that billing alone removes cleanly from Callboard. The errors read from the failed run were all notifications.
