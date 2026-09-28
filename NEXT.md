@@ -1,19 +1,10 @@
 # NEXT
 
-## ⚠ CI is red until `foundation-v1.2.0` lands on main (updated 2026-09-28)
-Only `modules-removed` fails on main; the `ci` job passes. The fix is built and proven on branch `foundation-v1.2.0`
-(`REQUIRED_MODULES = ['notifications']`, `npm run foundation:check-modules` passes with billing removed). It reaches main
-with "Ship phase 3".
-- **Every item:** run `gh run list --limit 3` before starting and after pushing, and read the jobs
-  (`gh run view <id> --json jobs`). A red `ci` job is the item, ahead of the queue. A red `modules-removed` alone is not.
-- CI runs on main and on pull requests only, so a push to a stacked branch starts no run.
-- Delete this block once CI is green on main.
-
-> **Pick up here: nothing is queued.** Backlog 8 (swaps) is built on branch `prd3-swaps`, the sixth stacked branch.
-> Backlog 9 waits until it is asked for, so the next move is Shane's: "Ship phase 3" below. Every new page, layout and
-> route handler must await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like
-> action field needs `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`,
-> not on main yet.
+> **Pick up here: nothing is queued.** Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and
+> production on 2026-09-28 (below). Backlog 9 waits until it is asked for. Every new page, layout and route handler must
+> await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
+> `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`, on main.
+> **Every item:** run `gh run list --limit 3` before starting and after pushing. CI runs on main and on pull requests only.
 
 ## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
@@ -38,26 +29,28 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 ## Backlog (in order)
 1. ~~Deploy phase 1+2~~ done 2026-09-26 (below). Still open: a Resend key so planners can sign in by email; 10DLC registration for volume.
 2. ~~Apply the design~~ done 2026-09-26, built straight from the design brief (below).
-3. ~~Phase 3, first slice~~ built 2026-09-27 on branch `phase-3` (below): card library, lead review, reliability tiers. **Not merged: see "Ship phase 3".**
-4. ~~Foundation upgrade to v1.0.2~~ merged 2026-09-28 on branch `foundation-v1.0.2`, stacked on `phase-3` (below). **Not on main: see "Ship phase 3".**
-5. ~~Foundation upgrade to v1.0.3~~ merged 2026-09-28 on branch `foundation-v1.0.3`, stacked on `foundation-v1.0.2` (below). **Not on main: see "Ship phase 3".**
-6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. **Not on main: see "Ship phase 3".**
-7. ~~Foundation upgrade to v1.1.0, v1.1.1 and v1.2.0~~ merged 2026-09-28 on branch `foundation-v1.2.0`, stacked on `phase-3-slice-2` (below). **Not on main: see "Ship phase 3".**
-8. ~~PRD 3 swaps~~ built 2026-09-28 on branch `prd3-swaps`, stacked on `foundation-v1.2.0` (below). **Not on main: see "Ship phase 3".**
+3. ~~Phase 3, first slice~~ built 2026-09-27 on branch `phase-3` (below): card library, lead review, reliability tiers. On main 2026-09-28.
+4. ~~Foundation upgrade to v1.0.2~~ merged 2026-09-28 on branch `foundation-v1.0.2`, stacked on `phase-3` (below). On main 2026-09-28.
+5. ~~Foundation upgrade to v1.0.3~~ merged 2026-09-28 on branch `foundation-v1.0.3`, stacked on `foundation-v1.0.2` (below). On main 2026-09-28.
+6. ~~Phase 3, second slice~~ built 2026-09-28 on branch `phase-3-slice-2`, stacked on `foundation-v1.0.3` (below): standard rules, area playbooks, event templates, post-event report, thank-you and come-back. On main 2026-09-28.
+7. ~~Foundation upgrade to v1.1.0, v1.1.1 and v1.2.0~~ merged 2026-09-28 on branch `foundation-v1.2.0`, stacked on `phase-3-slice-2` (below). On main 2026-09-28.
+8. ~~PRD 3 swaps~~ built 2026-09-28 on branch `prd3-swaps`, stacked on `foundation-v1.2.0` (below). On main 2026-09-28.
 9. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
-## Ship phase 3 (Shane, in this order)
-The production database must get both migrations before main gets the code: main auto-deploys, and the new code selects columns
-(`Position.cardId`, `Event.closedAt`, `Person.tierOverride`, `BillingAccount.stripeSubscriptionId`) the old database does not have.
-Both migrations only add, so the code running in production today keeps working after step 1.
-1. `npm run db:migrate:prod` (applies `20260927000000_billing_subscription_id`, `20260927164228_phase3_consistency`,
-   `20260928120000_phase3_library` and `20260928200000_swaps`). All four only add.
-2. `git checkout main && git merge --ff-only prd3-swaps && git push` ships both phase 3 slices, the outbox fix, the
-   foundation security fixes through v1.2.0 and swaps together, and turns CI green. To ship less, merge `phase-3`,
-   `foundation-v1.0.2`, `foundation-v1.0.3`, `phase-3-slice-2` or `foundation-v1.2.0` instead; each is a fast-forward and the rest follows later. The v1.1.1 security
-   fixes are due on main by 2026-10-05. Everyone signed in is signed out once by this deploy (the session cookie is renamed).
-3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, adds three closed past events so tiers
-   show in the demo, and adds the Registration playbook, the house rules and the "Expo template". It is idempotent.
+## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
+- Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was
+  fast-forwarded from `5e00041` to `d8f599a` (38 commits) and pushed, then `npm run seed:prod` ran (exit 0).
+- CI run 36472337968 on main: `ci` and `modules-removed` both pass, the first green run on main.
+- Production deployment `callboard-q794fwsw5` is Ready and holds the `callboard-ten.vercel.app` alias. `/`, `/demo` and `/login`
+  answer 200; a GET to `/api/sms/inbound` answers 405. Nothing behind a sign-in was clicked through in production.
+- The v1.1.1 security fixes were due on main by 2026-10-05: met. Everyone signed in was signed out once (cookie renamed).
+- The six stacked branches are all contained in main and still exist locally and on origin. Delete them when convenient.
+- **Open, Shane to decide: every push to a branch that is not main starts a Preview build that fails** in about 25 s with
+  `Invalid environment: DATABASE_URL, AUTH_SECRET, APP_URL`, because the Preview environment has no variables. Eight of them
+  failed on 2026-09-28. A failed build bills like a good one. Either skip Preview builds or give Preview its variables.
+- **Open, asked by Shane 2026-09-28: availability.** A double booking is refused at invite and at swap (any open assignment in
+  the org whose shift overlaps). Nothing shows who is free at a given time, the invite list does not mark or hide busy people,
+  and a float deploy from the board makes no overlap check.
 
 ## Swaps 2026-09-28 (backlog 8, PRD 3 P1)
 - **The flow**: on their own page a person opens "Swap this shift" under a confirmed shift and picks a colleague's shift. The
