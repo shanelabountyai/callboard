@@ -16,8 +16,8 @@ const STATUSES = ['invited', 'confirmed', 'declined', 'released'] as const;
 
 // Fill every shift from the directory and watch confirmations come in (PRD 3).
 export default async function Staff({ params }: { params: Promise<{ org: string; id: string }> }) {
-  const { org, id } = await params;
-  const ctx = await requireOrg(org);
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const event = await db.event.findFirst({
     where: { id, ...inOrg(ctx) },
     include: {

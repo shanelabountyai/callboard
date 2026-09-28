@@ -1,3 +1,4 @@
+// public: the link's token is the credential (readPersonLink); same-origin POST
 import { z } from 'zod';
 import { audit } from '@/core/audit';
 import { now } from '@/core/clock';

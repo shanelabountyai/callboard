@@ -19,8 +19,8 @@ const STATUSES = ['draft', 'staffing', 'confirmed', 'live', 'closed'] as const;
 
 // The plan (PRD 1) and its org chart (PRD 2) on one page: headcount by area, then the tree.
 export default async function EventPage({ params }: { params: Promise<{ org: string; id: string }> }) {
-  const { org, id } = await params;
-  const ctx = await requireOrg(org);
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const event = await db.event.findFirst({
     where: { id, ...inOrg(ctx) },
     include: {

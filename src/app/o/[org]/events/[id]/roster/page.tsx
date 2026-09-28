@@ -12,9 +12,9 @@ export const metadata = { title: 'Printable roster' };
 // The last resort when phones die (PRD 5): one sheet per AoR with a QR to the lead's roster and
 // In / Out columns to tick by hand and key in later. Print from the browser; the page breaks per AoR.
 export default async function Roster({ params, searchParams }: { params: Promise<{ org: string; id: string }>; searchParams: Promise<{ day?: string }> }) {
-  const { org, id } = await params;
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const q = await searchParams;
-  const ctx = await requireOrg(org);
   const event = await db.event.findFirst({
     where: { id, ...inOrg(ctx) },
     include: {

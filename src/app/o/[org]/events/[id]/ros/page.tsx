@@ -16,9 +16,9 @@ const ERRORS: Record<string, string> = {
 
 // The run of show stays in Excel or Smartsheet; this is the mirror, plus lines added by hand (PRD 1).
 export default async function RunOfShow({ params, searchParams }: { params: Promise<{ org: string; id: string }>; searchParams: Promise<{ imported?: string; error?: string }> }) {
-  const { org, id } = await params;
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const q = await searchParams;
-  const ctx = await requireOrg(org);
   const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) }, select: { id: true, name: true } });
   if (!event) notFound();
   const rows = await db.runOfShowRow.findMany({ where: { ...inOrg(ctx), eventId: id }, orderBy: [{ at: 'asc' }, { sortOrder: 'asc' }] });

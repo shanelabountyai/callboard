@@ -1,3 +1,4 @@
+// public: Twilio signature over the configured URL; 503 without TWILIO_AUTH_TOKEN
 import { env } from '@/core/env';
 import { handleInbound, twiml, verifyTwilio } from '@/lib/inbound';
 import '@/lib/messages';

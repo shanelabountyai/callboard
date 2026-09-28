@@ -15,9 +15,9 @@ export const metadata = { title: 'Coverage board' };
 // The live picture (PRD 5): one day, every shift, who is here against needed, coloured by minimum and
 // target; the alert queue; float to deploy. Overdue is computed live, so it never waits for the sweep.
 export default async function Board({ params, searchParams }: { params: Promise<{ org: string; id: string }>; searchParams: Promise<{ day?: string }> }) {
-  const { org, id } = await params;
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const q = await searchParams;
-  const ctx = await requireOrg(org);
   const event = await db.event.findFirst({
     where: { id, ...inOrg(ctx) },
     include: {

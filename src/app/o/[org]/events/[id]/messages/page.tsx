@@ -14,9 +14,9 @@ export const metadata = { title: 'Messages' };
 // Message an audience (PRD 4): the picker shows the recipient count on every option before sending,
 // and each past message shows acked / sent / failed per person, with one button for the non-ackers.
 export default async function Messages({ params, searchParams }: { params: Promise<{ org: string; id: string }>; searchParams: Promise<{ sent?: string; resent?: string }> }) {
-  const { org, id } = await params;
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const q = await searchParams;
-  const ctx = await requireOrg(org);
   const event = await db.event.findFirst({
     where: { id, ...inOrg(ctx) },
     include: {

@@ -13,8 +13,8 @@ const KIND = { no_show: 'No-show', help: 'Help request' };
 
 // The post-event report (PRD 6): planned against actual, read from check-in, alerts, help and reviews.
 export default async function Report({ params }: { params: Promise<{ org: string; id: string }> }) {
-  const { org, id } = await params;
-  const ctx = await requireOrg(org);
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const event = await db.event.findFirst({ where: { id, ...inOrg(ctx), isTemplate: false } });
   if (!event) notFound();
   const r = await buildReport({ orgId: ctx.orgId, eventId: event.id });

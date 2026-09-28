@@ -14,8 +14,8 @@ export const metadata = { title: 'Review' };
 
 // After the event (PRD 6): who has reviewed, what is still open, and the planner's way to finish or waive it.
 export default async function Review({ params }: { params: Promise<{ org: string; id: string }> }) {
-  const { org, id } = await params;
-  const ctx = await requireOrg(org);
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) } });
   if (!event) notFound();
   const areas = await reviewSheet({ orgId: ctx.orgId, eventId: event.id });

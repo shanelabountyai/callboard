@@ -15,8 +15,8 @@ const OWNER = ['owner', 'who', 'lead', 'responsible', 'contact'];
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export async function POST(req: Request, { params }: { params: Promise<{ org: string; id: string }> }) {
-  const { org, id } = await params;
-  const ctx = await requireOrg(org);
+  const ctx = await requireOrg((await params).org);
+  const { id } = await params;
   const back = (q: string) => Response.redirect(new URL(`/o/${ctx.slug}/events/${id}/ros?${q}`, req.url), 303);
   if (!isSameOrigin(req.headers)) return new Response(null, { status: 403 });
   const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) }, select: { id: true } });

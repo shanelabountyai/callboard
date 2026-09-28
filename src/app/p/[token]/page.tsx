@@ -1,3 +1,4 @@
+// public: no login; the link's token is the credential (readPersonLink), rate-limited by IP
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { now } from '@/core/clock';

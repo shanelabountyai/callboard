@@ -1,3 +1,4 @@
+// public: the root shell; renders no data
 import type { Viewport } from 'next';
 import './globals.css';
 
