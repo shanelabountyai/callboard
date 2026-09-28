@@ -44,7 +44,7 @@ export default async function Messages({ params, searchParams }: { params: Promi
     const o = r.outboxId ? outbox.get(r.outboxId) : undefined;
     if (!o) return 'sent';
     if (o.sentAt) return 'delivered to carrier';
-    return o.attempts >= MAX_ATTEMPTS ? `failed: ${o.lastError ?? 'unknown'}` : o.attempts ? `retrying (${o.lastError ?? 'error'})` : 'queued';
+    return o.attempts >= MAX_ATTEMPTS ? `failed: ${o.lastError ?? 'unknown'}` : o.attempts ? (o.lastError ? `retrying (${o.lastError})` : 'sending') : 'queued';
   };
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const base = `/o/${ctx.slug}/events/${event.id}`;

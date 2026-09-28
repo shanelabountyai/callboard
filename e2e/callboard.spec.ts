@@ -95,7 +95,7 @@ test('day of: board shows overdue, self check-in and lead tap check-in land on t
   await signInAsAcmeOwner(page);
   await page.getByRole('link', { name: 'Coverage board' }).click();
   await expect(page.getByRole('heading', { name: 'Board: Spring Expo' })).toBeVisible();
-  const greeter = page.getByRole('row').filter({ hasText: 'Registration · Greeter' }).first();
+  const greeter = page.getByRole('row').filter({ hasText: 'Registration · Greeter' }).filter({ hasText: 'Tom Alvarez · confirmed' }); // both of today's Greeter shifts start at the same instant, so row order is arbitrary: take the one Tom is on
   await expect(greeter).toBeVisible();
   await greeter.getByText('People').click();
   await expect(greeter).toContainText('Tom Alvarez · confirmed · overdue since');
@@ -117,7 +117,7 @@ test('day of: board shows overdue, self check-in and lead tap check-in land on t
   await expect(lead.getByText(/here \d+:\d\d [AP]M/).first()).toBeVisible();
 
   await page.reload();
-  const row = page.getByRole('row').filter({ hasText: 'Registration · Greeter' }).first();
+  const row = page.getByRole('row').filter({ hasText: 'Registration · Greeter' }).filter({ hasText: 'Tom Alvarez · confirmed' });
   await row.getByText('People').click();
   await expect(row).toContainText('Tom Alvarez · confirmed · here');
   await expect(row).not.toContainText('Tom Alvarez · confirmed · overdue');

@@ -1,12 +1,11 @@
 # NEXT
 
-> **Foundation upgrade waiting (2026-09-27): `v1.0.2`** — FR-01 outbox fix (send no longer inside the claim tx; a slow provider
-> was delivered but never recorded, then re-sent every cron run). `git fetch template --tags && git merge v1.0.2`, no migration;
-> re-run your outbox tests (a clone that wraps `drainOutbox` or its transports may conflict).
-> **Then `v1.0.3` (security, take within 7 days)** — FR-02..05: pending-MFA 10-min TTL + daily wrong-code cap, invite send caps,
-> org bound to one Stripe subscription (checkout refused while live), org deletion cancels the subscription first.
-> `git merge v1.0.3`, then **`npm run db:migrate`** (adds `BillingAccount.stripeSubscriptionId`; deployed clones: migrate prod too).
-> New clone-owned `src/app/org-hooks.ts`; a custom `PaymentProvider` needs `cancel()`. v1.1.0 (FR-06..11) follows.
+> **Foundation upgrade waiting: `v1.0.3` (security, take by 2026-10-04)** — FR-02..05: pending-MFA 10-min TTL + daily wrong-code cap,
+> invite send caps, org bound to one Stripe subscription (checkout refused while live), org deletion cancels the subscription first.
+> `git merge v1.0.3` (the tag is already fetched), then **`npm run db:migrate`** (adds `BillingAccount.stripeSubscriptionId`; migrate prod
+> before the code reaches main). New clone-owned `src/app/org-hooks.ts`; a custom `PaymentProvider` needs `cancel()`. v1.1.0 (FR-06..11) follows.
+> The `template` remote is SSH and fails host key verification in an unattended session: fetch tags with
+> `git fetch https://github.com/shanelabountyai/saas-foundation.git 'refs/tags/v1.0.3:refs/tags/v1.0.3'`.
 
 ## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
@@ -32,17 +31,32 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 1. ~~Deploy phase 1+2~~ done 2026-09-26 (below). Still open: a Resend key so planners can sign in by email; 10DLC registration for volume.
 2. ~~Apply the design~~ done 2026-09-26, built straight from the design brief (below).
 3. ~~Phase 3, first slice~~ built 2026-09-27 on branch `phase-3` (below): card library, lead review, reliability tiers. **Not merged: see "Ship phase 3".**
-4. Foundation upgrade to v1.0.2 (the note at the top of this file). Callboard calls `drainOutbox` from actions and the cron, so re-run the outbox and day-of tests after the merge.
-5. Phase 3, second slice (the rest of PRD 6 P0): post-event report, event templates with save-as-template, area playbooks, standard rules with per-event override, thank-you and come-back message. Then PRD 3 swaps.
+4. ~~Foundation upgrade to v1.0.2~~ merged 2026-09-28 on branch `foundation-v1.0.2`, stacked on `phase-3` (below). **Not on main: see "Ship phase 3".**
+5. Foundation upgrade to v1.0.3 (the note at the top of this file). Security, take by 2026-10-04. It has a migration, so it follows the same deploy order as phase 3.
+6. Phase 3, second slice (the rest of PRD 6 P0): post-event report, event templates with save-as-template, area playbooks, standard rules with per-event override, thank-you and come-back message. Then PRD 3 swaps.
 
 ## Ship phase 3 (Shane, in this order)
 The production database must get the migration before main gets the code: main auto-deploys, and the new code selects columns
 (`Position.cardId`, `Event.closedAt`, `Person.tierOverride`) the old database does not have. The migration only adds, so the code
 running in production today keeps working after step 1.
 1. `npm run db:migrate:prod` (applies `20260927164228_phase3_consistency`)
-2. `git checkout main && git merge --ff-only phase-3 && git push`
+2. `git checkout main && git merge --ff-only foundation-v1.0.2 && git push` ships phase 3 and the outbox fix together (v1.0.2 has no
+   migration). To ship phase 3 alone, merge `phase-3` instead and `foundation-v1.0.2` later.
 3. `npm run seed:prod` adds the five demo cards, links them to Spring Expo's positions, and adds three closed past events so tiers
    show in the demo. It is idempotent.
+
+## Foundation v1.0.2 2026-09-28 (backlog 4)
+- Merged tag `v1.0.2` (FR-01). The outbox claims a row in a short transaction, counts the attempt and leases it for 2 minutes, then
+  sends outside any transaction. Both transports time out after 15 s. No migration. Callboard never wrapped `drainOutbox`, so the only
+  conflict was this file.
+- One callboard change it forced: `attempts` is now counted at the claim, before the send, so the Messages page read a row that was
+  mid-send as "retrying (error)". It now says "sending" when there is an attempt and no error.
+- Found on the way: the day-of e2e spec moves both of day one's Greeter shifts to the same start time, then took the board's first
+  Greeter row. Row order between the two is arbitrary, so the spec failed whenever the board and the spec's own query disagreed, and
+  the restart after that failure reseeded the expo and failed the phase 3 spec behind it. The spec now takes the row Tom is on.
+  The board itself still orders by start time alone; add a second sort key if rows are ever seen swapping on refresh.
+- Gate: lint and typecheck clean; vitest 146 of 146 (3 new outbox tests from the foundation); e2e `callboard` + `headers` 8 of 8
+  against a production build.
 
 ## Phase 3, first slice 2026-09-27 (backlog 3)
 - **Cards** (`/o/[org]/cards`, nav "Cards"): title, purpose, what you do and what to do if (five lines each at most), never, skills and
