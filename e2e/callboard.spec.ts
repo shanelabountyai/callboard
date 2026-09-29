@@ -180,8 +180,9 @@ test('after the event: the card reaches the person, tiers stay with planners, cl
 
   await page.getByRole('link', { name: 'Events' }).first().click();
   await page.getByRole('link', { name: 'Spring Expo' }).click();
-  await page.locator('select[name="status"]').selectOption('closed');
-  await page.getByRole('button', { name: 'Set status' }).click();
+  await page.getByText('Close event…').click();
+  await expect(page.getByText(/This texts \d+ leads? a review link and \d+ (person|people) who checked in a thank-you/)).toBeVisible();
+  await page.getByRole('button', { name: 'Yes, close the event' }).click();
   await expect(page.getByRole('heading', { name: 'Review: Spring Expo' })).toBeVisible();
   await expect(page.getByText(/areas still open/)).toBeVisible();
 

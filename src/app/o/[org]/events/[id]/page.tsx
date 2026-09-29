@@ -6,8 +6,10 @@ import { ActionForm } from '@/core/ui/action-form';
 import { latestCards, latestPlaybooks } from '@/lib/cards';
 import { aor as stripe } from '@/lib/colors';
 import { PlaybookView } from '@/lib/playbook-view';
+import { reviewLeads, workedAt } from '@/lib/review';
 import { RuleFields } from '@/lib/rule-fields';
 import { deviations, standardOf } from '@/lib/rules';
+import { stageOf } from '@/lib/stages';
 import { BANDS } from '@/lib/templates';
 import { fmtDay, fmtTime } from '@/lib/time';
 import { saveAsTemplate } from '../actions';
@@ -15,7 +17,6 @@ import { addShift, deleteArea, deletePosition, deleteShift, saveLocation, saveRo
 
 export const metadata = { title: 'Event' };
 
-const STATUSES = ['draft', 'staffing', 'confirmed', 'live', 'closed'] as const;
 type Query = Record<string, string | string[] | undefined>;
 
 /** A delete sits behind edit mode and asks first. What cannot be deleted yet says why instead of failing. */
@@ -62,6 +63,11 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const off = deviations(event, standard);
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const tz = event.timezone;
+  // What closing will send, said before it is sent. Only the first close texts anyone.
+  const scope = { orgId: ctx.orgId, eventId: event.id };
+  const closable = !event.isTemplate && event.status !== 'draft' && event.status !== 'closed';
+  const texts = closable && !event.closedAt ? { leads: (await reviewLeads(db, scope)).length, worked: (await workedAt(db, scope)).length } : null;
+  const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
   const base = `/o/${ctx.slug}/events/${event.id}`;
   const count = (shifts: { needed: number; assignments: { status: string }[] }[]) => ({
     needed: shifts.reduce((n, s) => n + s.needed, 0),
@@ -88,11 +94,30 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         {event.venue && `${event.venue} · `}{event.days.map((d) => fmtDay(d.date, 'UTC')).join(', ')} · {tz}
       </p>
       {!event.isTemplate && (
-        <ActionForm action={bind(setStatus)}>
-          <input type="hidden" name="id" value={event.id} />
-          <label>Status <select name="status" defaultValue={event.status}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
-          <button type="submit">Set status</button>
-        </ActionForm>
+        <>
+          <p>Stage: <strong>{stageOf(event)}</strong>{event.status === 'draft' && '. Reminders, no-show alerts and replies by text start once the event is open for staffing.'}{closable && '. It starts running by itself on its first day.'}</p>
+          {closable ? (
+            <details>
+              <summary>Close event…</summary>
+              <ActionForm action={bind(setStatus)}>
+                <input type="hidden" name="id" value={event.id} />
+                <input type="hidden" name="status" value="closed" />
+                <p>
+                  {!texts ? 'Nobody is texted again: the review links and thank-yous went out the first time it was closed.'
+                    : texts.leads + texts.worked === 0 ? 'Nobody is texted: no location with shifts has a lead, and nobody checked in.'
+                    : `This texts ${n(texts.leads, 'lead', 'leads')} a review link and ${n(texts.worked, 'person', 'people')} who checked in a thank-you. A text cannot be unsent.`}
+                </p>
+                <button type="submit">Yes, close the event</button>
+              </ActionForm>
+            </details>
+          ) : (
+            <ActionForm action={bind(setStatus)}>
+              <input type="hidden" name="id" value={event.id} />
+              <input type="hidden" name="status" value="staffing" />
+              <button type="submit" className={event.status === 'draft' ? 'primary' : undefined}>{event.status === 'draft' ? 'Open for staffing' : 'Reopen event'}</button>
+            </ActionForm>
+          )}
+        </>
       )}
 
       {event.areas.length > 0 && (

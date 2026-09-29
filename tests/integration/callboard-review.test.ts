@@ -112,7 +112,7 @@ describe('the review', () => {
     const texts = await db.capturedMessage.findMany({ where: { body: { contains: '/review' } }, orderBy: { to: 'asc' } });
     expect(texts.map((m) => m.to)).toEqual([s.marcus.mobile, s.sofia.mobile]);
     expect(texts[0]!.body).toMatch(/\/p\/[\w-]+\/review/);
-    await went(setStatus('acme', { id: s.event.id, status: 'live' }));
+    await went(setStatus('acme', { id: s.event.id, status: 'staffing' })); // reopened
     await went(setStatus('acme', { id: s.event.id, status: 'closed' }));
     await drainOutbox();
     expect(await db.capturedMessage.count()).toBe(3); // a second close texts nobody again: two review links and Jen's thank-you

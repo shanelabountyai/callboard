@@ -8,6 +8,7 @@ import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
 import { cardLines, slug } from '@/lib/cards';
 import { must, onUnique } from '@/lib/refuse';
+import { startDue } from '@/lib/stages';
 
 // The area playbook library (PRD 6). The same rules as the card library (cards/actions.ts): every save is
 // a new version with a name on it, versions are linear, and a live or closed event keeps the one it ran with.
@@ -48,6 +49,7 @@ export const savePlaybook = orgAction(null, z.object({ id: ref('playbook'), ...f
   const next = clean(i);
   const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => next[k] !== base[k]);
   if (!changed.length) throw new Refused('Nothing changed, so there is no new version.');
+  await startDue(ctx.orgId); // an event on its first day is running, and frozen, before the cron says so
   await db.$transaction(async (tx) => {
     const pb = await tx.playbook
       .create({ data: { ...inOrg(ctx), key: base.key, version: base.version + 1, ...next, changedBy: ctx.userId } })

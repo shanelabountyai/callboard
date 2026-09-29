@@ -1,14 +1,17 @@
 # NEXT
 
-> **Pick up here: simplification item S2, the top bar from 12 items to 4** (section "Simplification" below). Branch it
-> off `usability`, not off `s1-event-page`: S2 touches the layout, not the event page.
-> **S1 is built and waits for Shane**: branch `s1-event-page`, pull request into `usability`. It merges when he says so.
+> **Pick up here: simplification item S4, phone pages with the action first** (section "Simplification" below). S4 changes
+> the `/p/[token]` pages, which no earlier item touched: branch it off `usability`.
+> **S1, S2 and S3 are built and wait for Shane**: branches `s1-event-page` (PR #4) and `s2-top-bar` (PR #5), each a pull
+> request into `usability`, and `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`, so it shows S3's change
+> alone. Each merges when he says so, S1 before S3. All three change `e2e/callboard.spec.ts`, on different lines.
+> This file on `s3-stage-buttons` is S2's copy plus S3, so it is the one to keep when the three meet.
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
 > **Held, not abandoned**: the live sheet, PR #3 (draft), branch `sheet-link`. Its notes are in that branch's NEXT.md.
-> **CI cannot run**: GitHub refuses to start jobs on this account for billing reasons, so the local gate is the only gate
-> until Shane fixes it (Settings, Billing & plans).
+> **CI runs again** (2026-09-29): run 36586741222 on S1's pull request passed in 5 minutes. The two failures before it, on
+> `sheet-link`, were the billing refusal (3 seconds each); re-run them when the live sheet is picked up.
 > Callboard is live at https://callboard.labintelligence.co behind the shared password (moved 2026-09-28).
 > Availability and the Preview switch-off shipped to main and production on 2026-09-28 (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
 > Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
@@ -62,9 +65,9 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 | Item | Change | Cost | Status |
 |---|---|---|---|
 | S1 | A plain event page: one "Add shift" form, everything else in a "More options" fold per item, deletes in an edit mode with a confirmation | 2 to 3 days | built 2026-09-29 on `s1-event-page`, waits for Shane |
-| S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | next |
-| S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | |
-| S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | |
+| S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | built 2026-09-29 on `s2-top-bar`, waits for Shane |
+| S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | built 2026-09-29 on `s3-stage-buttons`, waits for Shane |
+| S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | next |
 | S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | |
 
 - **Each item**: its own branch off `usability`, a pull request, and nothing merges to main until Shane says so for that
@@ -112,6 +115,71 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   + `headers` 11 of 11 against a production build (one new spec); `foundation:drift` clean against v1.2.0. CI did not run
   (GitHub billing).
 - Not checked: the page on a phone, keyboard order through the folds, a template's page (it is the same page).
+
+## S2, the top bar 2026-09-29 (branch `s2-top-bar`, not merged)
+- **Before and after** (`docs/usability/p-events.png`, `s2-events-after.png`, `s2-library-after.png`, `s2-settings-after.png`,
+  `s2-settings-after-phone.png`): 12 items to 4, with the org's name (it opens "Your orgs") and Account at the right. The
+  place you are in is bold.
+- **Library and Settings open a second row**, not a page of their own: Library is Job descriptions and Lead notes and opens
+  on the first; Settings is Event defaults, Members, Billing and Delete org (last) and opens on Event defaults.
+- **Why the second row is built in the layout**: the foundation's remove-a-module check only reads `{/* billing */}` markers in
+  `src/app/o/[org]/layout.tsx` (`MARKED_FILES`, a template-owned list). A Settings page of its own would have kept a dead
+  Billing link in a clone without billing. So the layout builds both rows and hands them to `nav.tsx`, the one client
+  component, which knows the address and shows the row that applies.
+- **Cut from the bar, pages kept**: Home (it only ever redirected to Events) and Templates (reached from "start from a
+  template" on the events page until S5 cuts it).
+- **Three headings renamed to match their links**: Position cards to Job descriptions, Area playbooks to Lead notes,
+  Standard rules to Event defaults. The words inside those pages are unchanged ("Save the standard", "card", "playbook").
+- **Defaults taken, all reversible, Shane to confirm**: a second row over dropdown menus (a menu needs client code to close
+  itself); Settings opens on Event defaults, the review's order, not on Members; the org name is the link to "Your orgs",
+  with no arrow or menu.
+- Skipped (add when asked): bold on the current link inside the second row, the Plan, Staff, Day of and After tabs on an
+  event (section 5 of the review, still owned by no item), the wording inside the library and settings pages.
+- No migration. No template-owned file changed.
+- Gate: lint and typecheck clean; vitest 197 of 197 (this branch has none of S1's three); e2e `callboard` + `headers` 10 of 10
+  against a production build; `foundation:drift` clean against v1.2.0; `foundation:check-modules` passes with billing removed. CI on PR #4 (S1) passed. On PR #5 the first
+  run passed and the second, same code, failed three specs (next line); the fix went up after it, so read its run with
+  `gh run list --limit 3` before starting S3.
+- **Found on the way, a race in the messages spec**: `taps.tsx` sets the button's text to "…" on the tap, before the POST
+  answers, so "no Got it button" was true at once and the planner's page reloaded before the ack was saved. It showed
+  "0 of N got it" and nothing reloaded again. The spec now waits for the POST to `/act`. The two failures behind it were
+  the known cascade: a failed test restarts the worker, which reseeds the expo. The other four phone taps in the file
+  wait for words the server renders, so they do not have it. **S1's branch does not have this fix until it takes
+  `usability` with S2 in it.**
+- Not checked: keyboard order through the two rows, a member who is not an owner (Billing and Delete org are hidden by the
+  same two permission checks as before).
+
+## S3, stage buttons 2026-09-29 (branch `s3-stage-buttons`, off `s1-event-page`, not merged)
+- **Four stages, two buttons**: Planning, Staffing, Running, Closed (`src/lib/stages.ts`). The event page shows the stage and
+  the one next step: "Open for staffing", then "Close event…". A closed event shows "Reopen event". The events list shows
+  the same words. No migration: the five stored values stay, and a row that holds `confirmed` reads as Staffing.
+- **Close asks first**: the fold says what it will send, from the same two queries the close uses (`reviewLeads`, `workedAt`
+  in `src/lib/review.ts`): "This texts 2 leads a review link and 12 people who checked in a thank-you." A second close
+  says nobody is texted again. The button inside is "Yes, close the event".
+- **Running is automatic** (`startDue`): an event open for staffing becomes `live` at the start of its first day, in its
+  own timezone. The cron does it every 5 minutes. The three saves that read the freeze (job descriptions, lead notes, event
+  defaults) and a reopen call it first, so the freeze never waits for the cron. The page works the stage out on read
+  (`stageOf`), so it says Running with no cron at all. An event still in Planning never starts by itself.
+- **`setStatus` takes `staffing` or `closed` only.** Nothing can set `live`, `draft` or `confirmed` by hand any more.
+- **Defaults taken, all reversible, Shane to confirm**: "Reopen event" is kept, with no confirmation, because it texts nobody
+  and a close by mistake needs a way back; the automatic start is not written to the audit log (the cron has no user; its
+  log line counts `started`); the confirmation is a second click on the page and the action does not check for it, as in S1.
+- **Skipped (add when asked)**: refusing invites while an event is in Planning. The review saw a text go out from a draft
+  event, and a reply to it finds nothing, because the sweeps and the SMS webhook skip drafts. Two ways to fix it: refuse the
+  invite, or open the event on the first invite. Also skipped: a way to close or cancel an event still in Planning.
+- **Also changed**: the board's small "live" label is "updates every 10 s" (it read as the event's status); the report says
+  "not closed yet" in place of the raw status.
+- **Before and after** (`docs/usability/s1-event-after.png` is the before; `s3-event-after.png`, `s3-close-after.png`,
+  `s3-planning-after.png`, `s3-events-after.png`). They show the old top bar, because this branch does not have S2.
+- Gate: lint and typecheck clean; `foundation:drift` clean against v1.2.0; vitest on the two files touched 16 of 16 (1 new,
+  "stages" in `tests/integration/callboard-library.test.ts`). **The full vitest run and the e2e sweep did not pass locally**
+  (next line). In their place a one-off script walked the production build: open for staffing, close with the warning,
+  reopen, and the second close that texts nobody. It passed, and it took the screenshots. **CI on PR #6 is the gate**: read
+  it with `gh run list --limit 3` before merging.
+- **Environment, proven this time**: both full vitest runs failed the invariant harness (180 s timeout, then its cascade of
+  `Org_pkey` and deadlock errors) at load 40 to 60, while alongside, loanbook, tradepost and storage business ran their
+  own tests. The same file on the unchanged branch, at the same load, failed the same 8 tests. So it is the machine.
+- Not checked: the page on a phone, keyboard order into the fold.
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was

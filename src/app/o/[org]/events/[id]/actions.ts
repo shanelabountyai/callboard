@@ -14,6 +14,7 @@ import { notify } from '@/lib/messages';
 import { must } from '@/lib/refuse';
 import { openReviews, sendThanks } from '@/lib/review';
 import { ruleShapeOptional } from '@/lib/rules';
+import { startDue } from '@/lib/stages';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { isHm, ymd, zonedToUtc } from '@/lib/time';
 
@@ -22,7 +23,8 @@ const page = (ctx: OrgCtx, eventId: string) => `/o/${ctx.slug}/events/${eventId}
 const optionalRef = (model: string) => z.union([ref(model), z.literal('')]);
 const int = (min: number, msg: string) => z.coerce.number().int().min(min, msg);
 
-export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.enum(['draft', 'staffing', 'confirmed', 'live', 'closed']) }), async (ctx, i) => {
+// The planner opens an event for staffing (or reopens a closed one) and closes it. Running is automatic: `startDue`.
+export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.enum(['staffing', 'closed']) }), async (ctx, i) => {
   const event = must(await db.event.findFirst({ where: { id: i.id, ...inOrg(ctx) } }));
   // The first close starts the review (PRD 6): leads get their link. Reopening and closing again does not text them twice.
   if (event.isTemplate) throw new Refused('A template is never staffed or run. Start an event from it instead.');
@@ -34,6 +36,7 @@ export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.
     await audit(ctx, 'event.status', { targetType: 'event', targetId: i.id, data: { status: i.status } }, tx);
   }, { timeout: 60_000 });
   if (firstClose) await drainOutbox(25);
+  if (i.status === 'staffing') await startDue(ctx.orgId); // reopened on or after its first day: straight back to running
   redirect(i.status === 'closed' ? `${page(ctx, i.id)}/review` : page(ctx, i.id));
 });
 

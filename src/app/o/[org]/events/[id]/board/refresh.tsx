@@ -11,5 +11,5 @@ export function AutoRefresh({ ms = 10_000 }: { ms?: number }) {
     const id = setInterval(tick, ms);
     return () => clearInterval(id);
   }, [ms, router]);
-  return <small aria-live="off">{at ? `updated ${at}` : 'live'}</small>; // text only, never a spinner
+  return <small aria-live="off">{at ? `updated ${at}` : `updates every ${ms / 1000} s`}</small>; // text only, never a spinner
 }
