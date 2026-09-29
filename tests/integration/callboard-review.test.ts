@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { advanceClock } from '@/core/clock';
 import { db } from '@/core/db';
 import { createCard, saveCard } from '@/app/o/[org]/cards/actions';
-import { setPositionCard, setStatus } from '@/app/o/[org]/events/[id]/actions';
+import { saveRole, setStatus } from '@/app/o/[org]/events/[id]/actions';
 import { saveAreaReview, waiveAreaReview } from '@/app/o/[org]/events/[id]/review/actions';
 import { POST as leadSave } from '@/app/p/[token]/review/save/route';
 import '@/lib/messages';
@@ -84,8 +84,8 @@ describe('position cards', () => {
     const planned = await db.event.create({ data: { orgId: s.orgId, name: 'Autumn Expo', status: 'staffing' } });
     const area = await db.area.create({ data: { orgId: s.orgId, eventId: planned.id, name: 'Registration' } });
     const later = await db.position.create({ data: { orgId: s.orgId, eventId: planned.id, areaId: area.id, name: 'Greeter' } });
-    await went(setPositionCard('acme', { id: s.greeter.id, cardId: v1.id }));
-    await went(setPositionCard('acme', { id: later.id, cardId: v1.id }));
+    await went(saveRole('acme', { id: s.greeter.id, cardId: v1.id }));
+    await went(saveRole('acme', { id: later.id, cardId: v1.id }));
 
     await went(saveCard('acme', { id: v1.id, title: 'Registration Greeter', purpose: 'The first face', duties: 'Welcome people', situations: 'A VIP is not on the list: radio your lead' }));
     const v2 = await db.positionCard.findFirstOrThrow({ where: { key: 'registration-greeter', version: 2 } });
@@ -98,7 +98,7 @@ describe('position cards', () => {
     expect(await db.positionCard.count({ where: { key: 'registration-greeter' } })).toBe(2);
 
     // Linking always takes the latest, whichever version was picked.
-    await went(setPositionCard('acme', { id: s.greeter.id, cardId: v1.id }));
+    await went(saveRole('acme', { id: s.greeter.id, cardId: v1.id }));
     expect((await db.position.findUniqueOrThrow({ where: { id: s.greeter.id } })).cardId).toBe(v2.id);
   });
 });
