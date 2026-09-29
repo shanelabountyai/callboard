@@ -136,8 +136,15 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   event (section 5 of the review, still owned by no item), the wording inside the library and settings pages.
 - No migration. No template-owned file changed.
 - Gate: lint and typecheck clean; vitest 197 of 197 (this branch has none of S1's three); e2e `callboard` + `headers` 10 of 10
-  against a production build; `foundation:drift` clean against v1.2.0; `foundation:check-modules` passes with billing removed. CI on PR #4 (S1) passed; read PR #5's run
-  with `gh run list --limit 3` before starting S3.
+  against a production build; `foundation:drift` clean against v1.2.0; `foundation:check-modules` passes with billing removed. CI on PR #4 (S1) passed. On PR #5 the first
+  run passed and the second, same code, failed three specs (next line); the fix went up after it, so read its run with
+  `gh run list --limit 3` before starting S3.
+- **Found on the way, a race in the messages spec**: `taps.tsx` sets the button's text to "…" on the tap, before the POST
+  answers, so "no Got it button" was true at once and the planner's page reloaded before the ack was saved. It showed
+  "0 of N got it" and nothing reloaded again. The spec now waits for the POST to `/act`. The two failures behind it were
+  the known cascade: a failed test restarts the worker, which reseeds the expo. The other four phone taps in the file
+  wait for words the server renders, so they do not have it. **S1's branch does not have this fix until it takes
+  `usability` with S2 in it.**
 - Not checked: keyboard order through the two rows, a member who is not an owner (Billing and Delete org are hidden by the
   same two permission checks as before).
 

@@ -143,7 +143,10 @@ test('messages: a broadcast with Got it reaches the audience and the ack shows o
   const url = rows[0].body.match(/https?:\/\/\S+\/p\/[\w-]+/)![0];
   const phone = await (await context.browser()!.newContext()).newPage();
   await phone.goto(url);
+  // Wait for the POST itself: taps.tsx relabels the button on the tap, so "no Got it button" is true before the ack has landed.
+  const acked = phone.waitForResponse((r) => r.url().endsWith('/act') && r.request().method() === 'POST');
   await phone.getByRole('button', { name: 'Got it' }).click(); // posts in place and refreshes: the card disappears once acked
+  expect((await acked).ok()).toBe(true);
   await expect(phone.getByRole('button', { name: 'Got it' })).toHaveCount(0);
   await page.reload();
   await expect(page.getByText(/1 of \d+ got it/)).toBeVisible();
