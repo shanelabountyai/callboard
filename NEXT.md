@@ -1,6 +1,8 @@
 # NEXT
 
-> **Pick up here: simplification item S1, the plain event page** (section "Simplification" below, branch `usability`).
+> **Pick up here: simplification item S2, the top bar from 12 items to 4** (section "Simplification" below). Branch it
+> off `usability`, not off `s1-event-page`: S2 touches the layout, not the event page.
+> **S1 is built and waits for Shane**: branch `s1-event-page`, pull request into `usability`. It merges when he says so.
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
@@ -59,8 +61,8 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 
 | Item | Change | Cost | Status |
 |---|---|---|---|
-| S1 | A plain event page: one "Add shift" form, everything else in a "More options" fold per item, deletes in an edit mode with a confirmation | 2 to 3 days | next |
-| S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | |
+| S1 | A plain event page: one "Add shift" form, everything else in a "More options" fold per item, deletes in an edit mode with a confirmation | 2 to 3 days | built 2026-09-29 on `s1-event-page`, waits for Shane |
+| S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | next |
 | S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | |
 | S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | |
 | S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | |
@@ -80,6 +82,36 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   two extra columns are harmless. Use `prisma migrate deploy`, never `migrate dev`, which would ask to reset.
 - **Untracked in the repo root**: `AGENTS.md` and `CLAUDE.md`, written by `next dev` (Next's own agent rules,
   `node_modules/next/dist/server/lib/generate-agent-files.js`). Shane decides: ignore, commit or delete.
+
+## S1, the plain event page 2026-09-29 (branch `s1-event-page`, not merged)
+- **Spring Expo, before and after** (`docs/usability/p-event.png`, `s1-event-after.png`, `s1-event-after-edit.png`): 38 buttons
+  to 2, 25 deletes to 0 (28 in edit mode, each behind a confirmation), 15 visible fields to 8, 11 folds to 10, 838 words to
+  643, 4,295 px to 3,218 px. **The page is still long**: 20 shift lines at 56 px each are most of it.
+- **One form**: "Add a shift" takes location, role, day, times, how many and a lead. A new location or role is made on the
+  way, matched by name in any case. A new role takes the job description with the same title. Arrive-early minutes and
+  extra invites come from the event's defaults. "Add another Greeter shift" on a role fills the form in.
+- **Lead per location, the team kept for the planner** (`setLead` in the event's `actions.ts`): the location joins the team
+  that person already leads; or its own team takes them, when that team has no lead or no other location; or a new team is
+  named after the location, in the next colour. No lead means the planner. A team left with no location is deleted. Only a
+  newly named lead or deputy is texted. Deputy and radio channel belong to the team, so they are shared by its locations.
+- **One Save per item**: `saveLocation`, `saveRole`, `saveShift`. A field left out of the form stays as it is. A role and a
+  shift could not be edited at all before; now they can.
+- **Edit mode** is `?edit=1`, with no client code. It shows Change and Delete on every shift and Delete on every role and
+  location. A delete is a fold with "Yes, delete" inside, and it says why when it cannot be done yet (people on the shift,
+  shifts on the role, roles on the location). A delete lands back in edit mode.
+- **Defaults taken, all reversible, Shane to confirm**: a shift's own options (how many, arrive early, extra invites) sit in
+  edit mode, because 20 "More options" folds were the new noise; a new role's minimum is 1; a team keeps the name of its
+  first location, and there is no field to rename it; the confirmation is a second click on the page, and the action does
+  not check for it.
+- **Left for their own items**: the status dropdown (S3), the eight links above the title and the top bar (S2 and the tabs
+  in section 5 of the review, which no item owns yet), "Save as a template" (S5), the words on every other page. Until
+  those land the event page says Location, Role and Lead notes while the board, Staff and phone pages say the old words.
+- Removed actions: `addAor`, `addArea`, `addPosition`, `setAorLead`, `setAreaAor`, `deleteAor`, `setPositionCard`,
+  `setAreaPlaybook`. No migration.
+- Gate: lint and typecheck clean; vitest 200 of 200 (3 new in `tests/integration/callboard-plan.test.ts`); e2e `callboard`
+  + `headers` 11 of 11 against a production build (one new spec); `foundation:drift` clean against v1.2.0. CI did not run
+  (GitHub billing).
+- Not checked: the page on a phone, keyboard order through the folds, a template's page (it is the same page).
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was
