@@ -76,6 +76,12 @@ test('run of show: an .xlsx import replaces imported rows and keeps a hand-added
   await expect(page.getByRole('row').filter({ hasText: 'Doors open' })).toContainText('08:00');
   await expect(page.getByRole('row').filter({ hasText: 'Staff debrief' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Opening keynote' })).toHaveCount(0); // the seeded import row is gone
+
+  // The live sheet: a link that is not Smartsheet, OneDrive or SharePoint is refused before anything is fetched.
+  await page.getByLabel('Sheet link').fill('https://example.com/ros.xlsx');
+  await page.getByRole('button', { name: 'Link and sync' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Paste a Smartsheet link' })).toBeVisible(); // filter: Next's route announcer is an alert too
+  await expect(page.getByText('2 imported, 1 added by hand')).toBeVisible();
 });
 
 // Phase 2: the day of. The seed puts Spring Expo three weeks out, so the spec pulls its first day to today

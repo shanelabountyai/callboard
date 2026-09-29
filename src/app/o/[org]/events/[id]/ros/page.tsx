@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
-import { addRosRow, deleteRosRow } from './actions';
+import { COLUMNS_ERROR } from '@/lib/ros';
+import { fmtWhen } from '@/lib/time';
+import { addRosRow, deleteRosRow, syncRos } from './actions';
 
 export const metadata = { title: 'Run of show' };
 
@@ -11,7 +13,7 @@ const ERRORS: Record<string, string> = {
   nofile: 'Choose a file first.',
   toolarge: 'That file is over 5 MB.',
   unreadable: 'That file could not be read. Export it as .xlsx or .csv and try again.',
-  columns: 'The header row needs a time column (Time, Start or When) and a cue column (Cue, Item, Description or What).',
+  columns: COLUMNS_ERROR,
 };
 
 // The run of show stays in Excel or Smartsheet; this is the mirror, plus lines added by hand (PRD 1).
@@ -19,7 +21,7 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
   const ctx = await requireOrg((await params).org);
   const { id } = await params;
   const q = await searchParams;
-  const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) }, select: { id: true, name: true } });
+  const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) }, select: { id: true, name: true, timezone: true, rosUrl: true, rosSyncedAt: true } });
   if (!event) notFound();
   const rows = await db.runOfShowRow.findMany({ where: { ...inOrg(ctx), eventId: id }, orderBy: [{ at: 'asc' }, { sortOrder: 'asc' }] });
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
@@ -61,7 +63,16 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
         <button type="submit">Add line</button>
       </ActionForm>
 
-      <h2>Import from Excel or Smartsheet</h2>
+      <h2>Live sheet</h2>
+      <p>Paste the link to the run of show in Smartsheet, or to an Excel workbook on OneDrive or SharePoint shared with &quot;Anyone with the link can view&quot;. Sync pulls the sheet as it is now: it replaces the imported rows and keeps the ones added by hand. Clear the link and sync to disconnect.</p>
+      {event.rosSyncedAt && <p>Last synced {fmtWhen(event.rosSyncedAt, event.timezone)}.</p>}
+      <ActionForm action={bind(syncRos)}>
+        <input type="hidden" name="eventId" value={event.id} />
+        <label>Sheet link <input name="url" type="url" maxLength={500} defaultValue={event.rosUrl} placeholder="https://app.smartsheet.com/sheets/..." /></label>
+        <button type="submit">{event.rosUrl ? 'Sync now' : 'Link and sync'}</button>
+      </ActionForm>
+
+      <h2>Import a file</h2>
       <p>Upload the sheet as .xlsx, or a .csv export from Smartsheet. The header row needs a time and a cue column; area and owner are optional. Re-importing replaces the imported rows and keeps the ones added by hand.</p>
       <form method="post" action={`${base}/ros/upload`} encType="multipart/form-data">
         <label>File <input type="file" name="file" accept=".xlsx,.csv" required /></label>
