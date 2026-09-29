@@ -44,7 +44,6 @@ export default async function Events({ params }: { params: Promise<{ org: string
       ))}
 
       <h2>New event</h2>
-      <p>Blank, below, or <Link href={`/o/${ctx.slug}/templates`}>start from a template</Link>.</p>
       <ActionForm action={bind(createEvent)}>
         <label>Name <input name="name" required maxLength={120} /></label>
         <label>Venue <input name="venue" maxLength={200} /></label>

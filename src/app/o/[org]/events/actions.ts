@@ -8,7 +8,7 @@ import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
 import { must } from '@/lib/refuse';
 import { pickRules, standardOf } from '@/lib/rules';
-import { BANDS, copyEvent } from '@/lib/templates';
+import { copyEvent } from '@/lib/templates';
 import { isYmd } from '@/lib/time';
 
 const eventPage = (ctx: OrgCtx, id: string) => `/o/${ctx.slug}/events/${id}`;
@@ -54,7 +54,7 @@ export const createEvent = orgAction(
 );
 
 /**
- * Start a new event from a template or from another event (PRD 1): the structure comes across with
+ * Start a new event from another event (PRD 1): the structure comes across with
  * every date shifted; assignments do not. See copyEvent.
  */
 export const duplicateEvent = orgAction(
@@ -64,16 +64,5 @@ export const duplicateEvent = orgAction(
     must(await db.event.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { id: true } }));
     const id = await db.$transaction((tx) => copyEvent(tx, ctx, i.id, { name: i.name, startsOn: i.startsOn }), { timeout: 30_000 });
     redirect(eventPage(ctx, id));
-  },
-);
-
-/** Save an event's structure to the library (PRD 6). The event itself is untouched and keeps no link to the template. */
-export const saveAsTemplate = orgAction(
-  null,
-  z.object({ id: ref('event'), name: z.string().trim().min(1, 'Give the template a name.').max(120), attendanceBand: z.enum(BANDS, { message: 'Pick an attendance band.' }) }),
-  async (ctx, i) => {
-    must(await db.event.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { id: true } }));
-    await db.$transaction((tx) => copyEvent(tx, ctx, i.id, { name: i.name, asTemplate: { band: i.attendanceBand } }), { timeout: 30_000 });
-    redirect(`/o/${ctx.slug}/templates`);
   },
 );

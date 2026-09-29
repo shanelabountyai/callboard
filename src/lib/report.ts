@@ -1,5 +1,6 @@
+import { now } from '@/core/clock';
 import { db } from '@/core/db';
-import { outcomeOf, REVIEWABLE, shownTier, tiersFor } from './review';
+import { ended, outcomeOf, REVIEWABLE, shownTier, TIER_LABEL, tiersFor } from './review';
 
 // The post-event report (PRD 6): what was planned against what happened, built on read from check-in,
 // alerts, help requests and reviews. Nothing is stored, so it can never disagree with its sources and a
@@ -51,20 +52,26 @@ export async function buildReport(scope: { orgId: string; eventId: string }) {
       include: { aor: true, review: true, positions: { include: { shifts: { include: { position: { select: { id: true, minHeadcount: true } }, assignments: { select: { checkedInAt: true, checkedOutAt: true } } } } } } },
     }),
     db.assignment.findMany({
-      where: { ...scope, ...REVIEWABLE },
+      where: { ...scope, ...REVIEWABLE, ...ended() }, // a shift still to come is not a no-show
       include: { person: true, review: true, event: { select: { graceMin: true } }, shift: { select: { callAt: true, endAt: true, position: { select: { graceMin: true } } } } },
     }),
     db.alert.findMany({ where: scope, include: { assignment: { select: { shift: { select: { position: { select: { name: true } } } } } } }, orderBy: { openedAt: 'asc' } }),
   ]);
-  const staffed = areas.map((a) => ({ ...a, hours: coverage(a.positions.flatMap((p) => p.shifts)) })).filter((a) => a.hours.length);
+  // Coverage and places read ended shifts only, like the no-show count: an hour still to come is not an hour under minimum.
+  const t = now();
+  const over = (a: (typeof areas)[number]) => a.positions.flatMap((p) => p.shifts).filter((s) => s.endAt < t);
+  const staffed = areas.filter((a) => a.positions.some((p) => p.shifts.length)).map((a) => ({ ...a, hours: coverage(over(a)) }));
   // ponytail: the tier is the person's tier today, which already counts this event; store the tier at invite time if the report must show who was a risk going in.
   const tiers = await tiersFor(scope.orgId, [...new Set(worked.map((a) => a.personId))]);
-  const rows = worked.map((a) => ({ outcome: outcomeOf(a), kind: a.person.kind, tier: `Tier ${shownTier(a.person, tiers).tier}` }));
+  const rows = worked.map((a) => ({ outcome: outcomeOf(a), kind: a.person.kind, tier: TIER_LABEL[shownTier(a.person, tiers).tier] }));
   const help = alerts.filter((a) => a.kind === 'help');
   return {
     areas: staffed,
+    places: staffed.flatMap(over).reduce((n, s) => n + s.needed, 0),
     shifts: rows.length,
     noShows: rows.filter((r) => r.outcome === 'no_show').length,
+    late: rows.filter((r) => r.outcome === 'late').length,
+    help: help.length,
     byPool: rate(rows, (r) => r.kind),
     byTier: rate(rows, (r) => r.tier),
     helpByCategory: tally(help, (a) => a.category || 'other'),

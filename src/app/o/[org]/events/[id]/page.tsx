@@ -8,9 +8,7 @@ import { AOR_COLORS, aor as stripe } from '@/lib/colors';
 import { PlaybookView } from '@/lib/playbook-view';
 import { RuleFields } from '@/lib/rule-fields';
 import { deviations, standardOf } from '@/lib/rules';
-import { BANDS } from '@/lib/templates';
 import { fmtDay, fmtTime } from '@/lib/time';
-import { saveAsTemplate } from '../actions';
 import { addAor, addArea, addPosition, addShift, deleteAor, deleteArea, deletePosition, deleteShift, setAorLead, setAreaAor, setAreaPlaybook, setEventDefaults, setPositionCard, setStatus } from './actions';
 
 export const metadata = { title: 'Event' };
@@ -78,18 +76,6 @@ export default async function EventPage({ params }: { params: Promise<{ org: str
           <button type="submit">Save rules</button>
         </ActionForm>
       </details>
-      {!event.isTemplate && (
-        <details>
-          <summary>Save as a template</summary>
-          <p>Keeps the areas of responsibility, areas, positions, shifts, cards, playbooks and rules. Leads are left as slots to fill and nobody&rsquo;s assignment comes along.{event.templateId && ' This event was started from a template; saving makes a new one and leaves that one as it is.'}</p>
-          <ActionForm action={saveAsTemplate.bind(null, ctx.slug)}>
-            <input type="hidden" name="id" value={event.id} />
-            <label>Template name <input name="name" required maxLength={120} defaultValue={`${event.name} template`} /></label>
-            <label>Attendance <select name="attendanceBand" defaultValue={event.attendanceBand || BANDS[1]}>{BANDS.map((b) => <option key={b} value={b}>{b}</option>)}</select></label>
-            <button type="submit">Save as template</button>
-          </ActionForm>
-        </details>
-      )}
 
       <h2>Headcount</h2>
       <p data-tone={tone(total)}>Whole event: {total.confirmed} confirmed of {total.needed} needed ({total.invited} still invited).</p>

@@ -10,7 +10,7 @@ import { ReviewFields } from '@/lib/review-fields';
 import { firstName } from '@/lib/staffing';
 import { fmtWhen } from '@/lib/time';
 
-// The lead's three-minute review (PRD 6): one form per area they own, what happened already filled in from check-in.
+// The lead's one-minute review (PRD 6): one form per area they own. Tick who not to have back, add a note, save.
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Review your crew', robots: { index: false, follow: false } };
 
@@ -32,12 +32,12 @@ export default async function LeadReview({ params, searchParams }: { params: Pro
       <p className="crumbs"><a href={`/p/${token}`}>Back to your page</a></p>
       <h1>Review: {event.name}</h1>
       {done && <p role="status">Saved. {left ? `${left} to go.` : 'That is everything. Thank you.'}</p>}
-      {error && <p role="alert">That did not save. Answer all three questions for the area and try again; if it still fails, reload this page first.</p>}
+      {error && <p role="alert">That did not save. Reload this page and try again.</p>}
       {event.status !== 'closed' ? (
         <p>Hi {firstName(person.name)}. The review opens when the planner closes the event.</p>
       ) : (
         <>
-          <p>Hi {firstName(person.name)}. What happened is filled in from check-in, so change only what is wrong. The three questions per area are the part only you can answer.</p>
+          <p>Hi {firstName(person.name)}. Who showed comes from check-in. Tick anyone you would not have back, add a note if the planner should know something, and save.</p>
           {areas.map((area) => (
             <section key={area.id} className="stripe" style={stripe(area.aor?.color)}>
               <h2>{area.name}</h2>

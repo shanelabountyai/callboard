@@ -173,13 +173,13 @@ test('messages: a broadcast with Got it reaches the audience and the ack shows o
 });
 
 // Phase 3 (PRD 6). Runs last in this file: it closes the event.
-test('after the event: the card reaches the person, tiers stay with planners, closing opens the lead’s review', async ({ page, context }) => {
+test('after the event: the card reaches the person, reliability stays on the People page, closing opens the lead’s short review', async ({ page, context }) => {
   await signInAsAcmeOwner(page);
   await page.getByRole('link', { name: 'People' }).click();
   // Three seeded past events: Tom came to all of them, Chloe missed two, Dev has only worked two.
-  await expect(page.getByRole('row').filter({ hasText: 'Tom Alvarez' })).toContainText('tier 1');
-  await expect(page.getByRole('row').filter({ hasText: 'Chloe Zhang' })).toContainText('tier 3');
-  await expect(page.getByRole('row').filter({ hasText: 'Dev Patel' })).toContainText('tier 2');
+  await expect(page.getByRole('row').filter({ hasText: 'Tom Alvarez' })).toContainText('Reliable');
+  await expect(page.getByRole('row').filter({ hasText: 'Chloe Zhang' })).toContainText('Missed shifts');
+  await expect(page.getByRole('row').filter({ hasText: 'Dev Patel' })).toContainText('Not enough history');
 
   // The expo is live (the day-of test), so a new version of the card must not reach it.
   await page.getByRole('link', { name: 'Cards' }).click();
@@ -200,10 +200,12 @@ test('after the event: the card reaches the person, tiers stay with planners, cl
   await expect(phone.getByText('Welcome every attendee').first()).toBeVisible();
   await expect(phone.getByText('Leave the post without a swap.', { exact: true }).first()).toBeVisible(); // version 1, frozen
   await expect(phone.getByText(/guess at a VIP/)).toHaveCount(0);
-  await expect(phone.getByText(/tier \d/)).toHaveCount(0); // never on a person's own page
+  await expect(phone.getByText(/Reliable|Not enough history|Missed shifts/)).toHaveCount(0); // never on a person's own page
 
   await page.getByRole('link', { name: 'Events' }).first().click();
   await page.getByRole('link', { name: 'Spring Expo' }).click();
+  // The day-of test left today's shifts running. A shift counts once it has ended, in the review and in the report.
+  await db.query(`UPDATE "Shift" SET "startAt" = now() - interval '20 minutes', "endAt" = now() - interval '1 minute' WHERE "eventId" = $1 AND "callAt" < now()`, [event.id]);
   await page.locator('select[name="status"]').selectOption('closed');
   await page.getByRole('button', { name: 'Set status' }).click();
   await expect(page.getByRole('heading', { name: 'Review: Spring Expo' })).toBeVisible();
@@ -211,21 +213,25 @@ test('after the event: the card reaches the person, tiers stay with planners, cl
 
   const { rows } = await db.query(`SELECT body FROM "CapturedMessage" WHERE "to" = '+15550100001' AND body LIKE '%/review%' ORDER BY "createdAt" DESC LIMIT 1`);
   const lead = await (await context.browser()!.newContext()).newPage();
-  await lead.goto(rows[0].body.match(/https?:\/\/\S+\/p\/[\w-]+\/review/)![0]);
+  const reviewUrl = rows[0].body.match(/https?:\/\/\S+\/p\/[\w-]+\/review/)![0];
+  await lead.goto(reviewUrl.replace(/\/review$/, ''));
+  await expect(lead.getByRole('link', { name: 'Review your crew' })).toBeVisible();
+  await expect(lead.getByText(/Reliable|Not enough history|Missed shifts/)).toHaveCount(0); // nor on a lead's list of their crew
+  await lead.goto(reviewUrl);
   const reg = lead.locator('section').filter({ has: lead.getByRole('heading', { name: 'Registration' }) });
-  await expect(reg.getByLabel('What happened: Tom Alvarez')).toHaveValue('late'); // he checked in after call time plus grace
-  await reg.getByLabel('Have Tom Alvarez back?').selectOption('yes');
-  await reg.getByLabel('When were you short-staffed?').fill('8 to 9am');
-  await reg.getByLabel('When did you have too many people?').fill('never');
-  await reg.getByLabel('What went wrong?').fill('nothing');
+  await expect(reg.getByRole('checkbox', { name: /Tom Alvarez/ })).not.toBeChecked();
+  await expect(reg.getByRole('combobox')).toHaveCount(0); // what happened is the planner's to change
+  await reg.getByLabel('Anything the planner should know?').fill('Short from 8 to 9am');
   await reg.getByRole('button', { name: 'Save Registration' }).click();
   await expect(lead.getByRole('status')).toContainText('Saved. 1 to go.'); // Marcus also owns the Info Desk
 
   await page.reload();
-  await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: /^Registration/ }) })).toContainText('Reviewed by Marcus Bell');
+  const planners = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Registration/ }) });
+  await expect(planners).toContainText('Reviewed by Marcus Bell');
+  await expect(planners.getByLabel('What happened: Tom Alvarez')).toHaveValue('late'); // he checked in after call time plus grace
 });
 
-test('the library: a rule change marks what deviates, a template starts an event, the report and the thank-you follow a close', async ({ page, context }) => {
+test('the library: a rule change marks what deviates, an earlier event starts a new one, the report and the thank-you follow a close', async ({ page, context }) => {
   await signInAsAcmeOwner(page);
   // Spring Expo is closed (the test above), so it keeps the grace it ran with and says so.
   await page.getByRole('link', { name: 'Rules' }).click();
@@ -233,20 +239,19 @@ test('the library: a rule change marks what deviates, a template starts an event
   await page.getByLabel(/^No-show grace/).fill('20');
   await page.getByRole('button', { name: 'Save the standard' }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Spring Expo' })).toContainText('No-show grace');
-  await expect(page.getByRole('row').filter({ hasText: 'Expo template' })).toHaveCount(0); // still planned: it followed
 
   await page.getByRole('link', { name: 'Playbooks' }).click();
   await expect(page.getByRole('heading', { name: /^Registration version 1/ })).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Printer 2 jams above 40 badges an hour' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Templates' }).click();
-  const tpl = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Expo template/ }) });
-  await expect(tpl).toContainText('250 to 1,000');
-  await tpl.getByLabel(/name/).fill('Autumn Expo');
-  await tpl.getByLabel('First day').fill('2027-10-01');
-  await tpl.getByRole('button', { name: 'Start an event from Expo template' }).click();
+  await expect(page.getByRole('link', { name: 'Templates' })).toHaveCount(0); // cut: an earlier event is the template
+  await page.getByRole('link', { name: 'Events' }).first().click();
+  const expo = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Spring Expo/ }) });
+  await expo.getByText('Start a new event from this one').click();
+  await expo.getByLabel('New name').fill('Autumn Expo');
+  await expo.getByLabel('First day').fill('2027-10-01');
+  await expo.getByRole('button', { name: 'Duplicate' }).click();
   await expect(page.getByRole('heading', { name: 'Autumn Expo', level: 1 })).toBeVisible();
-  await expect(page.getByText('Rules for this event (all standard)')).toBeVisible();
   await expect(page.getByText('Fri, Oct 1, Sat, Oct 2')).toBeVisible();
   await expect(page.getByLabel('Playbook for Registration')).not.toHaveValue('');
 
@@ -261,12 +266,14 @@ test('the library: a rule change marks what deviates, a template starts an event
 
   await page.getByRole('link', { name: 'Events' }).first().click();
   await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Expo template' })).toHaveCount(0); // a template is not an event
   await page.getByRole('link', { name: 'Spring Expo' }).click();
   await page.getByRole('link', { name: 'Report', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Report: Spring Expo' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Registration/ })).toBeVisible();
   await expect(page.getByText(/Provisional: \d of \d areas have no review yet/)).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Places filled' }).first()).toBeVisible(); // four numbers first
+  await expect(page.getByText(/Registration.*Marcus Bell.*Short from 8 to 9am/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Registration/ })).toBeHidden(); // the hourly tables are folded
+  await page.getByText('No-shows by group').click();
   await expect(page.getByRole('row').filter({ hasText: 'volunteer' })).toBeVisible();
 });
 

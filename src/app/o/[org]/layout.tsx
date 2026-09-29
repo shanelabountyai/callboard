@@ -17,7 +17,6 @@ export default async function OrgLayout({ children, params }: { children: React.
         <Link href={`${base}/people`}>People</Link>
         <Link href={`${base}/cards`}>Cards</Link>
         <Link href={`${base}/playbooks`}>Playbooks</Link>
-        <Link href={`${base}/templates`}>Templates</Link>
         <Link href={`${base}/rules`}>Rules</Link>
         <Link href={`${base}/settings/members`}>Members</Link>
         {can(ctx.role, 'billing.manage') && <Link href={`${base}/settings/billing`}>Billing</Link>} {/* billing */}

@@ -66,7 +66,6 @@ describe('reliability tier', () => {
   });
 });
 
-const answers = { understaffed: '8 to 9am', overstaffed: 'never', wentWrong: 'printer 2 jammed' };
 const post = (token: string, fields: Record<string, string>) =>
   leadSave(new Request(`http://localhost/p/${token}/review/save`, { method: 'POST', headers: { origin: 'http://localhost', host: 'localhost' }, body: new URLSearchParams(fields) }), { params: Promise.resolve({ token }) });
 
@@ -123,40 +122,49 @@ describe('the review', () => {
     expect(tiers.get(s.jen.id)!.why).toBe('last 1 event: 1 clean, 0 late or left early, 0 no-show');
     expect(tiers.has(s.ana.id)).toBe(false);
 
+    // Nothing ticked and no note is a whole review: the area is done and nobody's record is frozen.
     const marcus = await s.token(s.marcus.id);
-    const form = { areaId: s.reg.id, [`o:${s.aTom.id}`]: 'no_show', [`r:${s.aTom.id}`]: 'no', [`n:${s.aTom.id}`]: 'No call, no text', [`o:${s.aJen.id}`]: 'late', [`r:${s.aJen.id}`]: 'yes' };
-    let res = await post(marcus, form); // the three answers are missing
-    expect(res.headers.get('location')).toContain('/review?error=1');
-    expect(await db.review.count()).toBe(0);
-    res = await post(marcus, { ...form, ...answers });
+    const listed = { areaId: s.reg.id, [`p:${s.aTom.id}`]: '1', [`p:${s.aJen.id}`]: '1' };
+    let res = await post(marcus, listed);
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toContain('/review?done=1');
-    expect(await db.review.findUniqueOrThrow({ where: { assignmentId: s.aTom.id } })).toMatchObject({ outcome: 'no_show', rehire: false, note: 'No call, no text', by: 'Marcus Bell' });
-    expect(await db.areaReview.findUniqueOrThrow({ where: { areaId: s.reg.id } })).toMatchObject({ ...answers, waived: false, by: 'Marcus Bell' });
+    expect(await db.review.count()).toBe(0);
+    expect(await db.areaReview.findUniqueOrThrow({ where: { areaId: s.reg.id } })).toMatchObject({ wentWrong: '', waived: false, by: 'Marcus Bell' });
 
-    // The lead's word overrules the clock (Jen: late), and a no-show plus "would not rehire" is two strikes.
+    // A tick is the only row written, and what happened on it is what check-in said.
+    res = await post(marcus, { ...listed, [`no:${s.aTom.id}`]: 'on', note: 'Tom: no call, no text' });
+    expect(res.headers.get('location')).toContain('/review?done=1');
+    expect(await db.review.findMany()).toMatchObject([{ assignmentId: s.aTom.id, outcome: 'no_show', rehire: false, by: 'Marcus Bell' }]);
+    expect(await db.areaReview.findUniqueOrThrow({ where: { areaId: s.reg.id } })).toMatchObject({ wentWrong: 'Tom: no call, no text' });
+
+    // A no-show plus "would not have back" is two strikes; Jen, never ticked, stays on her check-in.
     tiers = await tiersFor(s.orgId);
     expect(tiers.get(s.tom.id)!.tier).toBe(3);
-    expect(tiers.get(s.jen.id)!.why).toBe('last 1 event: 0 clean, 1 late or left early, 0 no-show');
+    expect(tiers.get(s.jen.id)!.why).toBe('last 1 event: 1 clean, 0 late or left early, 0 no-show');
+
+    // The tick taken back.
+    await post(marcus, listed);
+    expect(await db.review.findUniqueOrThrow({ where: { assignmentId: s.aTom.id } })).toMatchObject({ outcome: 'no_show', rehire: null });
+    expect((await tiersFor(s.orgId)).get(s.tom.id)!.tier).toBe(2);
 
     // Not yours: another lead's area, someone who leads nothing, a person off this area's roster, a foreign origin.
-    expect((await post(await s.token(s.sofia.id), { areaId: s.reg.id, ...answers })).status).toBe(404);
-    expect((await post(await s.token(s.tom.id), { areaId: s.reg.id, ...answers })).status).toBe(404);
-    expect((await post(marcus, { areaId: s.reg.id, [`o:${s.aAna.id}`]: 'no_show', ...answers })).headers.get('location')).toContain('error=1'); // Ana declined: not reviewable
-    expect(await db.review.count()).toBe(2);
-    const foreign = await leadSave(new Request(`http://localhost/p/${marcus}/review/save`, { method: 'POST', headers: { origin: 'https://evil.example', host: 'localhost' }, body: new URLSearchParams({ areaId: s.reg.id, ...answers }) }), { params: Promise.resolve({ token: marcus }) });
+    expect((await post(await s.token(s.sofia.id), { areaId: s.reg.id })).status).toBe(404);
+    expect((await post(await s.token(s.tom.id), { areaId: s.reg.id })).status).toBe(404);
+    expect((await post(marcus, { areaId: s.reg.id, [`p:${s.aAna.id}`]: '1', [`no:${s.aAna.id}`]: 'on' })).headers.get('location')).toContain('error=1'); // Ana declined: not reviewable
+    expect(await db.review.count()).toBe(1);
+    const foreign = await leadSave(new Request(`http://localhost/p/${marcus}/review/save`, { method: 'POST', headers: { origin: 'https://evil.example', host: 'localhost' }, body: new URLSearchParams({ areaId: s.reg.id }) }), { params: Promise.resolve({ token: marcus }) });
     expect(foreign.status).toBe(403);
   });
 
   it('the planner can finish or waive an area, and only once the event is closed', async () => {
     const s = await stage();
     await actAs(s.dana.id, 'acme');
-    expect(await saveAreaReview('acme', { areaId: s.reg.id, ...answers })).toEqual({ error: 'The review opens when the event is closed.' });
+    expect(await saveAreaReview('acme', { areaId: s.reg.id })).toEqual({ error: 'The review opens when the event is closed.' });
     expect(await waiveAreaReview('acme', { areaId: s.hall.id, note: 'Too early' })).toEqual({ error: 'The review opens when the event is closed.' });
     await went(setStatus('acme', { id: s.event.id, status: 'closed' }));
 
-    expect(await saveAreaReview('acme', { areaId: s.reg.id, understaffed: 'never', overstaffed: '', wentWrong: 'nothing' })).toEqual({ error: expect.stringContaining('Answer all three') });
-    await went(saveAreaReview('acme', { areaId: s.reg.id, [`o:${s.aTom.id}`]: 'showed', [`r:${s.aTom.id}`]: '', ...answers })); // Dana saw him there; the tap was missed
+    expect(await saveAreaReview('acme', { areaId: s.reg.id, [`p:${s.aTom.id}`]: '1', [`o:${s.aTom.id}`]: 'vanished' })).toEqual({ error: 'Pick what happened from the list.' });
+    await went(saveAreaReview('acme', { areaId: s.reg.id, [`p:${s.aTom.id}`]: '1', [`o:${s.aTom.id}`]: 'showed' })); // Dana saw him there; the tap was missed
     expect(await db.review.findUniqueOrThrow({ where: { assignmentId: s.aTom.id } })).toMatchObject({ outcome: 'showed', rehire: null, by: 'dana@example.test' });
     expect((await tiersFor(s.orgId)).get(s.tom.id)!.why).toContain('1 clean');
 

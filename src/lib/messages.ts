@@ -49,8 +49,8 @@ Object.assign(templates, {
   }),
   // After the event (PRD 6).
   cb_review: (d) => ({
-    subject: `${s(d.event)}: your three-minute review`,
-    body: `${s(d.name)}, thank you for leading at ${s(d.event)}. One last thing, about three minutes: who showed, and what to fix next time. ${s(d.url)}`,
+    subject: `${s(d.event)}: your one-minute review`,
+    body: `${s(d.name)}, thank you for leading at ${s(d.event)}. One last thing, about a minute: anyone you would not have back, and anything to fix next time. ${s(d.url)}`,
   }),
   cb_review_due: (d) => ({
     subject: `${s(d.event)}: reviews still open after a week`,
