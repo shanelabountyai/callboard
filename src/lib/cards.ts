@@ -4,6 +4,13 @@ import { db } from '@/core/db';
 export const slug = (title: string) => title.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 export const cardLines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
 
+const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** Notes that say nothing the job description does not. ponytail: whole sentences only, so a reworded repeat still shows; compare by word overlap if that is seen. */
+export const repeatsCard = (card: { purpose: string; duties: string; situations: string; never: string; demands: string }, notes: string) => {
+  const all = flat([card.purpose, card.duties, card.situations, card.never, card.demands].join('\n'));
+  return notes.split(/\n|(?<=[.;!?])\s+/).map(flat).filter(Boolean).every((l) => all.includes(l));
+};
+
 const newest = <T extends { key: string; title: string }>(all: T[]) => all.filter((c, i) => all[i - 1]?.key !== c.key).sort((a, b) => a.title.localeCompare(b.title));
 const byVersion = [{ key: 'asc' }, { version: 'desc' }] as const;
 /** The latest version of every playbook in the org, by title. */

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { advanceClock, now } from '@/core/clock';
 import { db } from '@/core/db';
 import { resendToNonAckers, sendBroadcast } from '@/lib/broadcast';
+import { POST as act } from '@/app/p/[token]/act/route';
 import { checkIn, runDayOf } from '@/lib/dayof';
 import { handleInbound, twilioSignature, twiml, verifyTwilio } from '@/lib/inbound';
 import '@/lib/messages';
@@ -69,6 +70,33 @@ describe('no-show alerts and the escalation chain', () => {
     const tomAlert = await db.alert.findFirstOrThrow({ where: { assignmentId: s.a.id } });
     expect(tomAlert.step).toBe(2);
     expect(await runDayOf()).toMatchObject({ escalated: 0 }); // nothing past the planner
+  });
+
+  it('"Can’t reach them" tells the planner and never the person, keeps the shift, and can be undone; a lead cannot release', async () => {
+    const s = await stage();
+    await runDayOf();
+    await drainOutbox();
+    const token = (await captured())[0]!.body.match(/\/p\/([\w-]+)/)![1]!; // Marcus's link, from the no-show text
+    const alert = await db.alert.findFirstOrThrow({ where: { assignmentId: s.a.id } });
+    const tap = (kind: string) =>
+      act(new Request(`http://localhost/p/${token}/act`, { method: 'POST', headers: { origin: 'http://localhost', host: 'localhost', 'content-type': 'application/json' }, body: JSON.stringify({ kind, alert: alert.id }) }), { params: Promise.resolve({ token }) });
+    const state = async () => ({ ...(await db.alert.findUniqueOrThrow({ where: { id: alert.id }, select: { step: true, note: true, resolvedAt: true } })), status: (await db.assignment.findUniqueOrThrow({ where: { id: s.a.id } })).status });
+    const emails = async () => (await captured()).filter((m) => m.to === 'dana@example.test').map((m) => m.body);
+
+    expect((await tap('release')).status).toBe(400); // gone: releasing texts the person, and it is the planner's
+    expect((await tap('unreachable')).status).toBe(200);
+    expect((await tap('unreachable')).status).toBe(200); // a second tap sends nothing
+    expect(await state()).toEqual({ step: 2, note: 'Marcus Bell cannot reach them', resolvedAt: null, status: 'confirmed' });
+    expect(await emails()).toEqual([expect.stringContaining('Tom Alvarez (Greeter): Marcus Bell cannot reach them')]);
+    expect((await captured()).filter((m) => m.to === s.tom.mobile)).toEqual([]);
+    expect(await runDayOf()).toMatchObject({ noShows: 0, escalated: 0 }); // already with the planner
+
+    expect((await tap('reach_undo')).status).toBe(200);
+    expect((await tap('reach_undo')).status).toBe(200);
+    expect(await state()).toEqual({ step: 0, note: '', resolvedAt: null, status: 'confirmed' });
+    expect(await emails()).toHaveLength(2);
+    expect((await emails())[1]).toContain('Marcus Bell has reached them');
+    expect((await captured()).filter((m) => m.to === s.tom.mobile)).toEqual([]);
   });
 
   it('a check-in resolves the alert with the device and sync times; earlier wins, too-early is refused, auto-close flags', async () => {

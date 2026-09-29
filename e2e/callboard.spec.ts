@@ -48,6 +48,9 @@ test('invite from the staff page → SMS link → confirm without a login → pl
   await phone.goto(url);
   await expect(phone.getByRole('heading', { name: 'Spring Expo' })).toBeVisible();
   await expect(phone.getByText('Green vest')).toBeVisible();
+  await expect(phone.getByText('What the job is').first()).toBeVisible();
+  await expect(phone.getByText('Walk the aisles')).toBeHidden(); // the job description is folded, so the answer comes first
+  await expect(phone.getByRole('button', { name: 'Can’t make it' }).first()).toBeVisible();
   await phone.getByRole('button', { name: 'Confirm' }).first().click();
   await expect(phone.getByRole('status')).toContainText('you are confirmed');
   await tom.close();
@@ -115,6 +118,23 @@ test('day of: board shows overdue, self check-in and lead tap check-in land on t
   const lead = await (await context.browser()!.newContext()).newPage();
   await lead.goto(marcusUrl);
   await expect(lead.getByRole('heading', { name: 'You lead Front of house' })).toBeVisible();
+  // "Can't reach them": the planner is told, the person is not texted and keeps the shift, and it can be undone.
+  // The alert is the sweep's, which the cron raises; here it is put in by hand for one overdue person in his team.
+  const { rows: [absent] } = await db.query(`
+    SELECT a.id, a."personId", p.name, p.mobile, ar."aorId" FROM "Assignment" a JOIN "Person" p ON p.id = a."personId" JOIN "Shift" s ON s.id = a."shiftId"
+    JOIN "Position" po ON po.id = s."positionId" JOIN "Area" ar ON ar.id = po."areaId" JOIN "Aor" ao ON ao.id = ar."aorId"
+    WHERE a."eventId" = $1 AND ao.name = 'Front of house' AND a.status = 'confirmed' AND a."checkedInAt" IS NULL AND s."callAt" < now() AND a."personId" NOT IN ($2, $3) LIMIT 1`, [event.id, tom.id, marcus.id]);
+  await db.query(`INSERT INTO "Alert" (id, "orgId", "eventId", kind, "personId", "assignmentId", "aorId") VALUES (gen_random_uuid(), $1, $2, 'no_show', $3, $4, $5)`, [tom.orgId, event.id, absent.personId, absent.id, absent.aorId]);
+  await lead.reload();
+  await expect(lead.getByRole('button', { name: 'Release them' })).toHaveCount(0);
+  await lead.getByRole('button', { name: `Can’t reach ${absent.name}` }).click();
+  await expect(lead.getByRole('status')).toContainText('The planner has been told');
+  const { rows: [after] } = await db.query(`SELECT a.status, al.step, al.note, (SELECT count(*)::int FROM "CapturedMessage" m WHERE m."to" = $2 AND m.body LIKE '%released%') AS texts FROM "Assignment" a JOIN "Alert" al ON al."assignmentId" = a.id WHERE a.id = $1`, [absent.id, absent.mobile]);
+  expect(after).toEqual({ status: 'confirmed', step: 2, note: 'Marcus Bell cannot reach them', texts: 0 });
+  await lead.getByRole('button', { name: /^Undo/ }).click();
+  await expect(lead.getByRole('status')).toContainText('Undone');
+  await expect(lead.getByRole('button', { name: `Can’t reach ${absent.name}` })).toBeVisible();
+
   const hereButtons = lead.getByRole('button', { name: /^Check in / });
   const n = await hereButtons.count();
   expect(n).toBeGreaterThan(0);
@@ -176,6 +196,7 @@ test('after the event: the card reaches the person, tiers stay with planners, cl
   const tomUrl = await ensurePersonLink(prisma, { orgId: tom.orgId, eventId: event.id, personId: tom.id }, new Date(Date.now() + 86_400_000));
   const phone = await (await context.browser()!.newContext()).newPage();
   await phone.goto(tomUrl);
+  for (const fold of await phone.getByText('What the job is').all()) await fold.click(); // folded since S4: the answer comes first
   await expect(phone.getByText('Welcome every attendee').first()).toBeVisible();
   await expect(phone.getByText('Leave the post without a swap.', { exact: true }).first()).toBeVisible(); // version 1, frozen
   await expect(phone.getByText(/guess at a VIP/)).toHaveCount(0);
