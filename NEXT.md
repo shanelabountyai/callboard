@@ -8,6 +8,11 @@
 > no conflict and has no migration. Gate on it: lint, typecheck and `foundation:drift` clean; vitest 204 of 204 (201 in
 > the full run at load 30, the invariant file's 3 timed out there and passed alone, 14 of 14); e2e `callboard` +
 > `headers` 11 of 11 against a fresh production build. CI has not run on it (CI runs on pull requests and main).
+> **Decided by Shane 2026-09-29**: look at the five together first (over merging to main, and over merging and
+> deploying). Not to be asked again; the next word from him is merge, deploy, or what to change.
+> **To look locally use `npm run dev`**, never a plain `npm run build`: a production build reads `.env.production.local`
+> and the cloud-database guard refuses it (INV-18). Phone links in the dev database die with a reseed; mint new ones
+> with `ensurePersonLink` from `src/lib/links.ts`.
 > **Merging to main no longer deploys** (`77057d2`, `deploymentEnabled: false`): production moves only when the
 > main-manual deploy hook is called. After the merge the queue is backlog 11, the live sheet, rebased into the new event page.
 > If the five are merged one by one instead, the order is S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7),
