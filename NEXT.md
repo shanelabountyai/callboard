@@ -1,11 +1,11 @@
 # NEXT
 
 > **Pick up here: nothing is left to build in the simplification. All five items wait for Shane to look and say merge.**
-> When he does, merge in this order: S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7), S5 (into S4), then
+> When he does, merge in this order: S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7), S5 (PR #8, into S4), then
 > `usability` into main. After that the queue is backlog 11, the live sheet, rebased into the new event page.
 > **S1 to S5 are built and wait for Shane**: branches `s1-event-page` (PR #4), `s2-top-bar` (PR #5) and `s4-phone-pages`
 > (PR #7), each a pull request into `usability`; `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`; and
-> `s5-after-event`, a pull request into `s4-phone-pages`. Each shows its own change alone. All five change
+> `s5-after-event` (PR #8), a pull request into `s4-phone-pages`. Each shows its own change alone. All five change
 > `e2e/callboard.spec.ts`. This file on `s5-after-event` is S4's copy plus S5, so it is the one to keep when they meet.
 > **Where S5 will conflict**: S1 rewrote the event page (S5 only deletes the "Save as a template" fold there), S2 rewrote
 > the top bar (S5 only deletes the Templates link), S3 changed the report's "not closed yet" line and the spec's close
