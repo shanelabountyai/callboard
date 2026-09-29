@@ -27,7 +27,7 @@ export default async function Report({ params }: { params: Promise<{ org: string
     <main>
       <p className="crumbs"><Link href={base}>{event.name}</Link> <Link href={`${base}/review`}>Review</Link> <span>Report</span></p>
       <h1>Report: {event.name}</h1>
-      {event.status !== 'closed' && <p data-tone="amber">The event is {event.status}, so this is the picture so far. It is final once the event is closed and every area is reviewed or waived.</p>}
+      {event.status !== 'closed' && <p data-tone="amber">The event is not closed yet, so this is the picture so far. It is final once the event is closed and every area is reviewed or waived.</p>}
       {event.status === 'closed' && open > 0 && <p data-tone="amber">Provisional: {open} of {r.reviews.areas} areas have no review yet, so what happened still comes from check-in alone there. <Link href={`${base}/review`}>Finish or waive them</Link>.</p>}
       <p>
         {r.shifts} confirmed shifts, {r.noShows} no-shows ({pct(r.noShows, r.shifts)}). {short.length === 0 ? 'No area fell under its minimum.' : `${short.length} area-hours under minimum.`}

@@ -13,6 +13,8 @@ import '@/lib/messages';
 import { runReminders } from '@/lib/reminders';
 import { buildReport, coverage, median } from '@/lib/report';
 import { deviations, pickRules, standardOf } from '@/lib/rules';
+import { stageOf, startDue } from '@/lib/stages';
+import { ymd, zonedToUtc } from '@/lib/time';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { resetAuthTables } from '../helpers/auth';
 import { NavSignal } from '../helpers/next';
@@ -219,5 +221,35 @@ describe('thank you and come back', () => {
     expect((await db.person.findUniqueOrThrow({ where: { id: s.jen.id } })).wantsBackAt).not.toBeNull();
     expect((await db.person.findUniqueOrThrow({ where: { id: s.tom.id } })).wantsBackAt).toBeNull();
     expect((await tap('not-a-token', { kind: 'back' })).status).toBe(404);
+  });
+});
+
+describe('stages', () => {
+  it('an event open for staffing runs from the start of its first day, in its own timezone, and is frozen from then', async () => {
+    const s = await stage('live');
+    await actAs(s.dana.id, 'acme');
+    const std = pickRules(await standardOf(s.orgId, db));
+    const day = ymd(new Date(Date.now() + 2 * DAY));
+    await went(createEvent('acme', { name: 'Autumn Expo', startsOn: day, endsOn: day }));
+    await went(createEvent('acme', { name: 'Winter Gala', startsOn: day, endsOn: day })); // never opened for staffing
+    const autumn = await db.event.findFirstOrThrow({ where: { name: 'Autumn Expo' }, include: { days: true } });
+    const gala = await db.event.findFirstOrThrow({ where: { name: 'Winter Gala' } });
+    await went(setStatus('acme', { id: autumn.id, status: 'staffing' }));
+    const open = { ...autumn, status: 'staffing' as const };
+    const start = zonedToUtc(day, '00:00', autumn.timezone).getTime() - Date.now();
+
+    advanceClock(start - MIN);
+    expect(stageOf(open)).toBe('Staffing');
+    expect(await startDue()).toBe(0);
+
+    advanceClock(start + MIN);
+    expect(stageOf(open)).toBe('Running'); // the page says so before any cron has run
+    await went(saveStandard('acme', { ...std, graceMin: 20 })); // and so does the freeze
+    expect(await event(autumn.id)).toMatchObject({ status: 'live', graceMin: 15 }); // the rules it started with
+    expect(await event(gala.id)).toMatchObject({ status: 'draft', graceMin: 20 }); // planning never runs by itself
+
+    await went(setStatus('acme', { id: autumn.id, status: 'closed' }));
+    await went(setStatus('acme', { id: autumn.id, status: 'staffing' }));
+    expect((await event(autumn.id)).status).toBe('live'); // reopened on its day: running again
   });
 });

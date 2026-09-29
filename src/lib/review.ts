@@ -146,20 +146,26 @@ export const reviewSheet = (scope: { orgId: string; eventId: string }, aorIds?: 
   });
 export type SheetArea = Awaited<ReturnType<typeof reviewSheet>>[number];
 
-/** First close: start the review clock and text each AoR's lead (the deputy where there is no lead) their review link. */
+type Scope = { orgId: string; eventId: string };
+/** Who the first close texts a review link: each AoR's lead (the deputy where there is no lead), once however many they lead. */
+export async function reviewLeads(tx: Tx, scope: Scope) {
+  const aors = await tx.aor.findMany({ where: { ...scope, areas: { some: STAFFED } }, include: { lead: true, deputy: true } });
+  return [...new Map(aors.flatMap((a) => a.lead ?? a.deputy ?? []).map((p) => [p.id, p])).values()];
+}
+/** Who the first close thanks: everyone who checked in. */
+export const workedAt = (tx: Tx, scope: Scope) => tx.person.findMany({ where: { orgId: scope.orgId, assignments: { some: { ...scope, checkedInAt: { not: null } } } } });
+
+/** First close: start the review clock and text each lead their review link. */
 export async function openReviews(tx: Tx, event: { id: string; orgId: string; name: string }) {
   const t = now();
   const scope = { orgId: event.orgId, eventId: event.id };
   await tx.event.update({ where: { id: event.id }, data: { closedAt: t } });
-  const aors = await tx.aor.findMany({ where: { ...scope, areas: { some: STAFFED } }, include: { lead: true, deputy: true } });
-  const told = new Set<string>();
-  for (const p of aors.map((a) => a.lead ?? a.deputy)) {
-    if (!p || told.has(p.id)) continue; // one text, however many AoRs they lead
-    told.add(p.id);
+  const leads = await reviewLeads(tx, scope);
+  for (const p of leads) {
     const url = await ensurePersonLink(tx, { ...scope, personId: p.id }, new Date(t.getTime() + REVIEW_ASK_MS + 86_400_000));
     await notify(tx, event.orgId, p, 'cb_review', { name: firstName(p.name), event: event.name, url: `${url}/review` });
   }
-  return told.size;
+  return leads.length;
 }
 
 export const THANKS = 'Thank you for your work at {event}, {name}. It went well because you were there.';
@@ -172,7 +178,7 @@ export const THANKS_LINK_MS = 30 * 86_400_000; // how long "count me in next tim
  */
 export async function sendThanks(tx: Tx, event: { id: string; orgId: string; name: string; thanks: string }) {
   const scope = { orgId: event.orgId, eventId: event.id };
-  const worked = await tx.person.findMany({ where: { orgId: event.orgId, assignments: { some: { ...scope, checkedInAt: { not: null } } } } });
+  const worked = await workedAt(tx, scope);
   const expires = new Date(now().getTime() + THANKS_LINK_MS);
   for (const p of worked) {
     const url = await ensurePersonLink(tx, { ...scope, personId: p.id }, expires);
