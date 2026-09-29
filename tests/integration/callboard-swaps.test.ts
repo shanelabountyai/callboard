@@ -134,7 +134,7 @@ describe('swaps', () => {
     expect((await sent()).filter((x) => x.body.includes('is approved'))).toHaveLength(2);
 
     expect(await askSwap(s.marcus, s.scope, s.m.id, s.a.id)).toBe('swap_asked');
-    advanceClock(2 * 24 * HOUR); // Tom's afternoon call time has passed
+    advanceClock(3 * 24 * HOUR); // past Tom's afternoon call time at any hour: the day is two days out at 00:00 UTC, so two days on is only past it after midday UTC
     expect(await answerSwap(s.tom, s.scope, (await theSwap()).id, true)).toBe('swap_stale');
     expect(await shiftOf(s.m.id)).toBe(s.evening.id);
   });
