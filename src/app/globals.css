@@ -153,6 +153,7 @@ ul.plain { list-style: none; padding: 0; margin: 0; }
 .row:last-child { border-bottom: 0; }
 .row .grow { flex: 1 1 12rem; }
 .row form { margin: 0; }
+.row[data-late] { border-left: 4px solid var(--red); padding-left: 8px; } /* overdue: at the top of the lead's list */
 
 /* Offline banner: neutral and persistent; it is not a problem */
 .banner:empty { display: none; }

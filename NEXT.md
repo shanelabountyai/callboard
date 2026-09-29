@@ -1,11 +1,12 @@
 # NEXT
 
-> **Pick up here: simplification item S4, phone pages with the action first** (section "Simplification" below). S4 changes
-> the `/p/[token]` pages, which no earlier item touched: branch it off `usability`.
-> **S1, S2 and S3 are built and wait for Shane**: branches `s1-event-page` (PR #4) and `s2-top-bar` (PR #5), each a pull
-> request into `usability`, and `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`, so it shows S3's change
-> alone. Each merges when he says so, S1 before S3. All three change `e2e/callboard.spec.ts`, on different lines.
-> This file on `s3-stage-buttons` is S2's copy plus S3, so it is the one to keep when the three meet.
+> **Pick up here: simplification item S5, the after-event and reliability features hidden until needed** (section
+> "Simplification" below). S5 changes the lead review, the report and the templates, and takes tiers off the lead's list,
+> which S4 rewrote: branch it off `s4-phone-pages`, with its pull request into `s4-phone-pages`.
+> **S1 to S4 are built and wait for Shane**: branches `s1-event-page` (PR #4), `s2-top-bar` (PR #5) and `s4-phone-pages`
+> (PR #7), each a pull request into `usability`, and `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`, so
+> it shows S3's change alone. Each merges when he says so, S1 before S3. All four change `e2e/callboard.spec.ts`, on
+> different lines. This file on `s4-phone-pages` is S3's copy plus S4, so it is the one to keep when the four meet.
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
@@ -67,8 +68,8 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 | S1 | A plain event page: one "Add shift" form, everything else in a "More options" fold per item, deletes in an edit mode with a confirmation | 2 to 3 days | built 2026-09-29 on `s1-event-page`, waits for Shane |
 | S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | built 2026-09-29 on `s2-top-bar`, waits for Shane |
 | S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | built 2026-09-29 on `s3-stage-buttons`, waits for Shane |
-| S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | next |
-| S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | |
+| S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | built 2026-09-29 on `s4-phone-pages`, waits for Shane |
+| S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | next |
 
 - **Each item**: its own branch off `usability`, a pull request, and nothing merges to main until Shane says so for that
   item. Show him the page before and after.
@@ -180,6 +181,43 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   `Org_pkey` and deadlock errors) at load 40 to 60, while alongside, loanbook, tradepost and storage business ran their
   own tests. The same file on the unchanged branch, at the same load, failed the same 8 tests. So it is the machine.
 - Not checked: the page on a phone, keyboard order into the fold.
+
+## S4, phone pages with the action first 2026-09-29 (branch `s4-phone-pages`, off `usability`, not merged)
+- **Staff, before and after** (`docs/usability/s11-expo-staff-firstscreen.png`, `s4-staff-after-firstscreen.png`), a Greeter
+  invite on a 375 by 812 phone: the top of Confirm from 916 px to 342 px, the words before it from about 140 to 34. The
+  job description and the notes for this event sit under one fold, "What the job is". "Decline" reads "Can't make it".
+- **Notes that repeat the job description are dropped** (`repeatsCard` in `src/lib/cards.ts`): only when every sentence
+  of the notes is in the job description. A reworded repeat still shows, inside the fold.
+- **Lead, before and after** (`l1-lead-alert.png`, `s4-lead-after.png`, `s4-cant-reach-after.png`): one list for one day.
+  The people who are overdue sit at the top, marked red, each with their role and Here; nobody appears twice. The first
+  Here is at 204 px after 29 words (about 160 before). The day shown is today, or the next day with shifts, or the last.
+  The other days are one fold. A deputy's two-day page before the day: 523 words to 255, about 3,500 px to 2,152 px
+  (`s12-expo-priya.png`, `s4-deputy-after.png`).
+- **"Can't reach them"** (`cantReach` in `src/lib/dayof.ts`, kinds `unreachable` and `reach_undo` in `/p/[token]/act`): the
+  no-show goes to the planners at once, by email and on the board ("with you", with the lead's name). The person is not
+  texted and keeps the shift. **Undo** hands it back to the first step of the chain, restarts its timer and emails the
+  planners that it is back. A second tap of either changes nothing and sends nothing.
+- **A lead cannot release anyone from the phone any more.** The `release` kind is gone from the route (it answers 400).
+  The planner releases from the Staff page, which texts the person as before. The no-show text to a lead now ends
+  "Check them in, or pass it to the planner", not "Check in, release or get cover".
+- **Defaults taken, all reversible, Shane to confirm**: the mark that a lead passed a no-show on is the alert's note, so
+  there is no migration; "Can't reach them" shows once the sweep has raised the alert, up to 5 minutes after the person
+  turns red; the undo emails the planners as well; a no-show row has no "Done", only Here and Can't reach them (a help
+  request keeps Done, which was Handled); the house rules, the deputy, the radio channel and the lead notes moved to one
+  fold at the foot of the team, "Lead notes and house rules".
+- **Skipped (add when asked)**: the greyed Confirm that stays beside an active "Can't make it" after a yes, and the
+  one-tap decline on the day; help pre-set to supplies, and the chip words "vip" and "relief"; the swap dropdown wider
+  than its card; a shift heading with nothing under it when its whole crew is overdue. Tiers on the lead's list are S5's.
+  The board and the Staff page still say the old words.
+- No migration. No template-owned file changed.
+- Gate: lint and typecheck clean; vitest 199 of 199 (2 new: can't reach in `tests/integration/callboard-dayof.test.ts`,
+  the notes check in `tests/unit/callboard-lib.test.ts`); e2e `callboard` + `headers` 10 of 10 against a production build
+  (this branch has none of S1's spec); `foundation:drift` clean against v1.2.0. The machine was quiet (load 4).
+- **This branch carries S2's fix to the messages spec** (cherry-picked, `df03395`), so its e2e run does not have the race.
+- **Two specs changed for the fold**: they open "What the job is" before they read the job description.
+- **Left behind**: `git stash list` shows one entry on `s4-phone-pages`. It holds a copy of this file equal to S3's.
+  Dropping it was refused in the session; `git stash drop` removes it.
+- Not checked: keyboard order into the folds, the lead's page with no JavaScript, a team with more than about 30 people.
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was
