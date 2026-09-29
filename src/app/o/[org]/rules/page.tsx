@@ -17,7 +17,7 @@ export default async function Rules({ params }: { params: Promise<{ org: string 
 
   return (
     <main>
-      <h1>Standard rules</h1>
+      <h1>Event defaults</h1>
       <p>How this organisation runs an event. A new event starts on these, an event still being planned follows a change made here, and a live or closed event keeps the rules it ran with. Any event can set its own on its page.</p>
       <ActionForm action={saveStandard.bind(null, ctx.slug)}>
         <RuleFields values={standard} />

@@ -60,7 +60,9 @@ small, .muted { color: var(--muted); font-size: 0.9rem; }
   display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center;
   padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface);
 }
-.topbar strong { margin-right: 8px; }
+.topbar a[aria-current] { font-weight: 600; }
+.topbar .right { margin-left: auto; }
+.topbar.sub { padding-top: 0; padding-bottom: 0; background: none; }
 .topbar a { text-decoration: none; padding: 8px 0; }
 .topbar a:hover { text-decoration: underline; }
 .crumbs { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px; color: var(--muted); }

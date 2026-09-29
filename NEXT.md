@@ -1,11 +1,15 @@
 # NEXT
 
-> **Pick up here: simplification item S4, phone pages with the action first** (section "Simplification" below). S4 changes
-> the `/p/[token]` pages, which no earlier item touched: branch it off `usability`.
-> **S1, S2 and S3 are built and wait for Shane**: branches `s1-event-page` (PR #4) and `s2-top-bar` (PR #5), each a pull
-> request into `usability`, and `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`, so it shows S3's change
-> alone. Each merges when he says so, S1 before S3. All three change `e2e/callboard.spec.ts`, on different lines.
-> This file on `s3-stage-buttons` is S2's copy plus S3, so it is the one to keep when the three meet.
+> **Pick up here: nothing is left to build in the simplification. All five items wait for Shane to look and say merge.**
+> When he does, merge in this order: S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7), S5 (PR #8, into S4), then
+> `usability` into main. After that the queue is backlog 11, the live sheet, rebased into the new event page.
+> **S1 to S5 are built and wait for Shane**: branches `s1-event-page` (PR #4), `s2-top-bar` (PR #5) and `s4-phone-pages`
+> (PR #7), each a pull request into `usability`; `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`; and
+> `s5-after-event` (PR #8), a pull request into `s4-phone-pages`. Each shows its own change alone. All five change
+> `e2e/callboard.spec.ts`. This file on `s5-after-event` is S4's copy plus S5, so it is the one to keep when they meet.
+> **Where S5 will conflict**: S1 rewrote the event page (S5 only deletes the "Save as a template" fold there), S2 rewrote
+> the top bar (S5 only deletes the Templates link), S3 changed the report's "not closed yet" line and the spec's close
+> steps (S5 rewrote the report page; keep S5's page and S3's close steps).
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
@@ -67,12 +71,12 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 | S1 | A plain event page: one "Add shift" form, everything else in a "More options" fold per item, deletes in an edit mode with a confirmation | 2 to 3 days | built 2026-09-29 on `s1-event-page`, waits for Shane |
 | S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | built 2026-09-29 on `s2-top-bar`, waits for Shane |
 | S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | built 2026-09-29 on `s3-stage-buttons`, waits for Shane |
-| S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | next |
-| S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | |
+| S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | built 2026-09-29 on `s4-phone-pages`, waits for Shane |
+| S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | built 2026-09-29 on `s5-after-event`, waits for Shane |
 
 - **Each item**: its own branch off `usability`, a pull request, and nothing merges to main until Shane says so for that
   item. Show him the page before and after.
-- **Bug to fix inside S5, confirmed in code**: `src/lib/report.ts` counts confirmed shifts that have not happened yet as
+- **Bug fixed in S5** (was confirmed in code): `src/lib/report.ts` counts confirmed shifts that have not happened yet as
   no-shows, because its assignment query has no `shift: { endAt: { lt: now() } }` (`tiersFor` in `src/lib/review.ts`
   has one). Spring Expo, 18 days out, reads "7 no-shows (100%)".
 - **Safety findings to carry into S1 and S4**: 25 Delete buttons on the event page with no confirmation; "Release them"
@@ -180,6 +184,91 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   `Org_pkey` and deadlock errors) at load 40 to 60, while alongside, loanbook, tradepost and storage business ran their
   own tests. The same file on the unchanged branch, at the same load, failed the same 8 tests. So it is the machine.
 - Not checked: the page on a phone, keyboard order into the fold.
+
+## S4, phone pages with the action first 2026-09-29 (branch `s4-phone-pages`, off `usability`, not merged)
+- **Staff, before and after** (`docs/usability/s11-expo-staff-firstscreen.png`, `s4-staff-after-firstscreen.png`), a Greeter
+  invite on a 375 by 812 phone: the top of Confirm from 916 px to 342 px, the words before it from about 140 to 34. The
+  job description and the notes for this event sit under one fold, "What the job is". "Decline" reads "Can't make it".
+- **Notes that repeat the job description are dropped** (`repeatsCard` in `src/lib/cards.ts`): only when every sentence
+  of the notes is in the job description. A reworded repeat still shows, inside the fold.
+- **Lead, before and after** (`l1-lead-alert.png`, `s4-lead-after.png`, `s4-cant-reach-after.png`): one list for one day.
+  The people who are overdue sit at the top, marked red, each with their role and Here; nobody appears twice. The first
+  Here is at 204 px after 29 words (about 160 before). The day shown is today, or the next day with shifts, or the last.
+  The other days are one fold. A deputy's two-day page before the day: 523 words to 255, about 3,500 px to 2,152 px
+  (`s12-expo-priya.png`, `s4-deputy-after.png`).
+- **"Can't reach them"** (`cantReach` in `src/lib/dayof.ts`, kinds `unreachable` and `reach_undo` in `/p/[token]/act`): the
+  no-show goes to the planners at once, by email and on the board ("with you", with the lead's name). The person is not
+  texted and keeps the shift. **Undo** hands it back to the first step of the chain, restarts its timer and emails the
+  planners that it is back. A second tap of either changes nothing and sends nothing.
+- **A lead cannot release anyone from the phone any more.** The `release` kind is gone from the route (it answers 400).
+  The planner releases from the Staff page, which texts the person as before. The no-show text to a lead now ends
+  "Check them in, or pass it to the planner", not "Check in, release or get cover".
+- **Defaults taken, all reversible, Shane to confirm**: the mark that a lead passed a no-show on is the alert's note, so
+  there is no migration; "Can't reach them" shows once the sweep has raised the alert, up to 5 minutes after the person
+  turns red; the undo emails the planners as well; a no-show row has no "Done", only Here and Can't reach them (a help
+  request keeps Done, which was Handled); the house rules, the deputy, the radio channel and the lead notes moved to one
+  fold at the foot of the team, "Lead notes and house rules".
+- **Skipped (add when asked)**: the greyed Confirm that stays beside an active "Can't make it" after a yes, and the
+  one-tap decline on the day; help pre-set to supplies, and the chip words "vip" and "relief"; the swap dropdown wider
+  than its card; a shift heading with nothing under it when its whole crew is overdue. Tiers on the lead's list are S5's.
+  The board and the Staff page still say the old words.
+- No migration. No template-owned file changed.
+- Gate: lint and typecheck clean; vitest 199 of 199 (2 new: can't reach in `tests/integration/callboard-dayof.test.ts`,
+  the notes check in `tests/unit/callboard-lib.test.ts`); e2e `callboard` + `headers` 10 of 10 against a production build
+  (this branch has none of S1's spec); `foundation:drift` clean against v1.2.0. The machine was quiet (load 4).
+- **This branch carries S2's fix to the messages spec** (cherry-picked, `df03395`), so its e2e run does not have the race.
+- **Two specs changed for the fold**: they open "What the job is" before they read the job description.
+- **Left behind**: `git stash list` shows one entry on `s4-phone-pages`. It holds a copy of this file equal to S3's.
+  Dropping it was refused in the session; `git stash drop` removes it.
+- Not checked: keyboard order into the folds, the lead's page with no JavaScript, a team with more than about 30 people.
+
+## S5, after-event and reliability hidden until needed 2026-09-29 (branch `s5-after-event`, off `s4-phone-pages`, not merged)
+- **Lead review, before and after** (`docs/usability/l7-lead-review.png`, `s5-lead-review-after.png`): per person, three
+  fields became one tick, "Anyone you would not have back?"; per area, three required questions became one optional
+  note, "Anything the planner should know?". A crew of five: 18 fields to 6. A save with nothing ticked and no note is a
+  whole review. Measured on Marcus's page, two areas and seven people, on a 375 px phone: 9 fields (it would
+  have been 27), 184 words, 1,300 px.
+- **A lead's save freezes nothing** (`saveReview` in `src/lib/review.ts`): a person gets a `Review` row only when they are
+  ticked, when a tick is taken back, or when the planner picks what happened. Everyone else stays on check-in. The old
+  form wrote a row for everyone listed, pre-filled, on every save.
+- **The planner's review page keeps "what happened"** per person (the `outcomes` flag on `ReviewFields`), with the same
+  tick and note. Its "People reviewed" column is gone: with rows written only for ticks it would read "1 of 7".
+- **The bug, fixed at the cause**: one rule, `ended()` in `src/lib/review.ts`, "a shift counts once it has ended". Tiers
+  had it. The report's counts, the report's coverage by hour and the review's list of people now read it too. So a shift
+  still to come is not a no-show, an hour still to come is not an hour under minimum, and a close before the last shift
+  ends no longer lists that crew as "never checked in" (section 7 of the review, the lead review row).
+- **Report, before and after** (`p-report.png`, `s5-report-after.png`): four numbers first (places filled, no-shows,
+  late, help requests), then what the leads said, then four folds: coverage by hour, no-shows by group, help requests,
+  how fast alerts were handled. The equipment section is cut. Spring Expo after a close: about 690 words and a
+  60-row table became 86 words and 720 px, one screen. Its "area-hours under minimum" fell from 33 to 3 when the hours
+  of day two, three weeks out, stopped counting.
+- **Templates are cut**: the page, the top bar link, "start from a template", "Save as a template" and `saveAsTemplate`
+  are gone, and the seed makes none. "Start a new event from this one" on the events list is the feature. **A copy now
+  keeps the leads and the emergency contact** (a template blanked both), so check the leads on the new event.
+- **Rows saved as templates stay in the database** (production has "Expo template" from `seed:prod`): hidden from every
+  list, still refused for staffing and status, reachable only by their address. No migration; `isTemplate`, `templateId`
+  and `attendanceBand` stay as columns. Delete the rows by hand if they are ever in the way.
+- **Reliability shows on the People page only**, in words: Reliable, Not enough history, Missed shifts. The pill is off
+  the lead's list and off the invite list, which keeps its order (most reliable first). The report's fold uses the same
+  words. `Person.tierOverride` still holds 1, 2 or 3.
+- **Words changed in a text**: the review link's text and the lead's page say "about a minute", not "three minutes".
+- **Defaults taken, all reversible, Shane to confirm**: the one note is stored in `AreaReview.wentWrong` (no migration;
+  an old review keeps its other two answers and the report shows them); the note is optional; a crafted POST from a
+  lead's link can still send "what happened", as the old form let them; "Not enough history" is also what a mixed record
+  reads as (two lates in eight events), and "Missed shifts" is also two "would not have back", because the review gave
+  three labels for three tiers; the reason sits beside the label on the People page.
+- **Skipped (add when asked)**: per-person notes (the column stays, the old notes are kept and shown nowhere); "have them
+  back: yes" (it never moved a tier); the Plan, Staff, Day of and After tabs (section 5 of the review, owned by no item);
+  renaming `src/lib/templates.ts`, which now holds only the copy.
+- No migration. No template-owned file changed.
+- Gate: lint and typecheck clean; vitest 200 of 200 in 57 s (1 new, "a shift still to come is not a no-show"; the review
+  and copy tests rewritten for the new form and for no templates); e2e `callboard` + `headers` 10 of 10 against a
+  production build, run twice; `foundation:drift` clean against v1.2.0. The machine was at load 11 to 28 for the full
+  runs. One earlier run of the library file, at load 62, lost an untouched test to a 20 s hook timeout and passed alone.
+- **The spec moves the expo's running shifts into the past before it closes the event**, because the review and the
+  report now read ended shifts only. S3's version of those steps uses the stage buttons: keep both when they meet.
+- Not checked: keyboard order into the report's folds, the report on a phone, a review saved on the old form and opened
+  on the new one in a browser (the integration test covers the save).
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was

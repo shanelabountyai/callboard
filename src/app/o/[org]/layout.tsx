@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { can } from '@/core/authz/permissions';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
+import { Nav } from './nav';
 
 // Navigation only. Layouts do not re-run on every navigation, so each page calls requireOrg itself.
 export default async function OrgLayout({ children, params }: { children: React.ReactNode; params: Promise<{ org: string }> }) {
@@ -10,21 +11,24 @@ export default async function OrgLayout({ children, params }: { children: React.
   const base = `/o/${ctx.slug}`;
   return (
     <>
-      <nav className="topbar" aria-label="Organisation">
-        <strong>{org.name}</strong>
-        <Link href={base}>Home</Link>
-        <Link href={`${base}/events`}>Events</Link>
-        <Link href={`${base}/people`}>People</Link>
-        <Link href={`${base}/cards`}>Cards</Link>
-        <Link href={`${base}/playbooks`}>Playbooks</Link>
-        <Link href={`${base}/templates`}>Templates</Link>
-        <Link href={`${base}/rules`}>Rules</Link>
-        <Link href={`${base}/settings/members`}>Members</Link>
-        {can(ctx.role, 'billing.manage') && <Link href={`${base}/settings/billing`}>Billing</Link>} {/* billing */}
-        {can(ctx.role, 'org.delete') && <Link href={`${base}/settings/danger`}>Delete org</Link>}
-        <Link href="/onboarding">Your orgs</Link>
-        <Link href="/account/security">Account</Link>
-      </nav>
+      <Nav
+        base={base}
+        org={org.name}
+        library={
+          <>
+            <Link href={`${base}/cards`}>Job descriptions</Link>
+            <Link href={`${base}/playbooks`}>Lead notes</Link>
+          </>
+        }
+        settings={
+          <>
+            <Link href={`${base}/rules`}>Event defaults</Link>
+            <Link href={`${base}/settings/members`}>Members</Link>
+            {can(ctx.role, 'billing.manage') && <Link href={`${base}/settings/billing`}>Billing</Link>} {/* billing */}
+            {can(ctx.role, 'org.delete') && <Link href={`${base}/settings/danger`}>Delete org</Link>}
+          </>
+        }
+      />
       {children}
     </>
   );

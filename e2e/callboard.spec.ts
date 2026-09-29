@@ -143,7 +143,10 @@ test('messages: a broadcast with Got it reaches the audience and the ack shows o
   const url = rows[0].body.match(/https?:\/\/\S+\/p\/[\w-]+/)![0];
   const phone = await (await context.browser()!.newContext()).newPage();
   await phone.goto(url);
+  // Wait for the POST itself: taps.tsx relabels the button on the tap, so "no Got it button" is true before the ack has landed.
+  const acked = phone.waitForResponse((r) => r.url().endsWith('/act') && r.request().method() === 'POST');
   await phone.getByRole('button', { name: 'Got it' }).click(); // posts in place and refreshes: the card disappears once acked
+  expect((await acked).ok()).toBe(true);
   await expect(phone.getByRole('button', { name: 'Got it' })).toHaveCount(0);
   await page.reload();
   await expect(page.getByText(/1 of \d+ got it/)).toBeVisible();
@@ -159,7 +162,7 @@ test('after the event: the card reaches the person, tiers stay with planners, cl
   await expect(page.getByRole('row').filter({ hasText: 'Dev Patel' })).toContainText('tier 2');
 
   // The expo is live (the day-of test), so a new version of the card must not reach it.
-  await page.getByRole('link', { name: 'Cards' }).click();
+  await page.getByRole('link', { name: 'Library' }).click();
   const card = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Greeter/ }) });
   await card.getByText('Edit Greeter').click();
   await card.locator('textarea[name="never"]').fill('Leave the post without a swap, or guess at a VIP.');
@@ -205,18 +208,20 @@ test('after the event: the card reaches the person, tiers stay with planners, cl
 test('the library: a rule change marks what deviates, a template starts an event, the report and the thank-you follow a close', async ({ page, context }) => {
   await signInAsAcmeOwner(page);
   // Spring Expo is closed (the test above), so it keeps the grace it ran with and says so.
-  await page.getByRole('link', { name: 'Rules' }).click();
-  await expect(page.getByRole('heading', { name: 'Standard rules' })).toBeVisible();
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Event defaults' })).toBeVisible();
   await page.getByLabel(/^No-show grace/).fill('20');
   await page.getByRole('button', { name: 'Save the standard' }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Spring Expo' })).toContainText('No-show grace');
   await expect(page.getByRole('row').filter({ hasText: 'Expo template' })).toHaveCount(0); // still planned: it followed
 
-  await page.getByRole('link', { name: 'Playbooks' }).click();
+  await page.getByRole('link', { name: 'Library' }).click();
+  await page.getByRole('link', { name: 'Lead notes' }).click();
   await expect(page.getByRole('heading', { name: /^Registration version 1/ })).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Printer 2 jams above 40 badges an hour' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Templates' }).click();
+  await page.getByRole('link', { name: 'Events' }).first().click(); // Templates left the top bar
+  await page.getByRole('link', { name: 'start from a template' }).click();
   const tpl = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Expo template/ }) });
   await expect(tpl).toContainText('250 to 1,000');
   await tpl.getByLabel(/name/).fill('Autumn Expo');
