@@ -1,8 +1,17 @@
 # NEXT
 
 > **Pick up here: nothing is left to build in the simplification. All five items wait for Shane to look and say merge.**
-> When he does, merge in this order: S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7), S5 (PR #8, into S4), then
-> `usability` into main. After that the queue is backlog 11, the live sheet, rebased into the new event page.
+> **The five together are on `usability-all`** (2026-09-29, pushed, no pull request yet): `usability` plus S1, S3, S2, S4, S5
+> merged in that order, conflicts resolved as the notes below said (S1's event page without the template fold, S2's top
+> bar, S5's report page, S5's shift move followed by S3's close steps in the spec). It is the branch to look at, and the
+> one to merge: a pull request from it into main carries all five and makes PRs #4 to #8 redundant. It meets main with
+> no conflict and has no migration. Gate on it: lint, typecheck and `foundation:drift` clean; vitest 204 of 204 (201 in
+> the full run at load 30, the invariant file's 3 timed out there and passed alone, 14 of 14); e2e `callboard` +
+> `headers` 11 of 11 against a fresh production build. CI has not run on it (CI runs on pull requests and main).
+> **Merging to main no longer deploys** (`77057d2`, `deploymentEnabled: false`): production moves only when the
+> main-manual deploy hook is called. After the merge the queue is backlog 11, the live sheet, rebased into the new event page.
+> If the five are merged one by one instead, the order is S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7),
+> S5 (PR #8, into S4), then `usability` into main; `git rerere` on this laptop holds the resolutions.
 > **S1 to S5 are built and wait for Shane**: branches `s1-event-page` (PR #4), `s2-top-bar` (PR #5) and `s4-phone-pages`
 > (PR #7), each a pull request into `usability`; `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`; and
 > `s5-after-event` (PR #8), a pull request into `s4-phone-pages`. Each shows its own change alone. All five change
