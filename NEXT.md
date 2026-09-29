@@ -1,8 +1,13 @@
 # NEXT
 
-> **Nothing is in flight.** Callboard is live at https://callboard.labintelligence.co behind the shared password
-> (moved 2026-09-28, section below). The backlog is empty until item 10 is asked for, so the next thing to raise is
-> closure: `docs/DEMO.md`, the exec brief, the LinkedIn posts and the cost review (the cron runs every 5 minutes).
+> **Pick up here: simplification item S1, the plain event page** (section "Simplification" below, branch `usability`).
+> Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
+> He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
+> closure deliverables wait behind S1 to S5.
+> **Held, not abandoned**: the live sheet, PR #3 (draft), branch `sheet-link`. Its notes are in that branch's NEXT.md.
+> **CI cannot run**: GitHub refuses to start jobs on this account for billing reasons, so the local gate is the only gate
+> until Shane fixes it (Settings, Billing & plans).
+> Callboard is live at https://callboard.labintelligence.co behind the shared password (moved 2026-09-28).
 > Availability and the Preview switch-off shipped to main and production on 2026-09-28 (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
 > Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
 > await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
@@ -39,7 +44,42 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 7. ~~Foundation upgrade to v1.1.0, v1.1.1 and v1.2.0~~ merged 2026-09-28 on branch `foundation-v1.2.0`, stacked on `phase-3-slice-2` (below). On main 2026-09-28.
 8. ~~PRD 3 swaps~~ built 2026-09-28 on branch `prd3-swaps`, stacked on `foundation-v1.2.0` (below). On main 2026-09-28.
 9. ~~Availability and Preview builds~~ built 2026-09-28 on branch `availability` (below). On main 2026-09-28, PR #1.
-10. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
+10. **Simplification S1 to S5** (below), chosen by Shane 2026-09-29. One item per session, in order.
+11. The live sheet, PR #3: held until S1 has reshaped the event pages, then rebased into the new layout.
+12. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
+
+## Simplification 2026-09-29 (backlog 10)
+- **Decided by Shane 2026-09-29**: build all five of the review's changes in ranked order (over the quick wins first,
+  the event page alone, or reading the report first), and hold the live sheet (over shipping it as built). Neither is
+  to be asked again.
+- **The review**: `docs/USABILITY_REVIEW.md`, 54 screenshots in `docs/usability/`. Done against the running app. Read
+  section 2 for the item in hand, section 4 for what is cut, hidden, merged or kept, section 6 for the new words.
+- **The cause**: every feature from all three phases shows at once, on every event, from the first minute. The staff
+  phone pages are already simple.
+
+| Item | Change | Cost | Status |
+|---|---|---|---|
+| S1 | A plain event page: one "Add shift" form, everything else in a "More options" fold per item, deletes in an edit mode with a confirmation | 2 to 3 days | next |
+| S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | |
+| S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | |
+| S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | |
+| S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | |
+
+- **Each item**: its own branch off `usability`, a pull request, and nothing merges to main until Shane says so for that
+  item. Show him the page before and after.
+- **Bug to fix inside S5, confirmed in code**: `src/lib/report.ts` counts confirmed shifts that have not happened yet as
+  no-shows, because its assignment query has no `shift: { endAt: { lt: now() } }` (`tiersFor` in `src/lib/review.ts`
+  has one). Spring Expo, 18 days out, reads "7 no-shows (100%)".
+- **Safety findings to carry into S1 and S4**: 25 Delete buttons on the event page with no confirmation; "Release them"
+  on the lead page removes the person and texts them in one tap; closing an event texts every lead and everyone who
+  checked in with no warning.
+- **Not reviewed**: keyboard focus order and colour contrast.
+- **State of this branch**: the review, plus the two test fixes picked from `sheet-link` (`ecdf7a4`: the swaps test that
+  failed before midday UTC, and `DEMO_ACCESS_PASSWORD` blanked for the e2e server).
+- **Local databases are one migration ahead of this branch**: both have `20260929000000_ros_link` from `sheet-link`. The
+  two extra columns are harmless. Use `prisma migrate deploy`, never `migrate dev`, which would ask to reset.
+- **Untracked in the repo root**: `AGENTS.md` and `CLAUDE.md`, written by `next dev` (Next's own agent rules,
+  `node_modules/next/dist/server/lib/generate-agent-files.js`). Shane decides: ignore, commit or delete.
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was
