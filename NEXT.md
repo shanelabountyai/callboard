@@ -1,8 +1,10 @@
 # NEXT
 
-> **Pick up here: simplification item S2, the top bar from 12 items to 4** (section "Simplification" below). Branch it
-> off `usability`, not off `s1-event-page`: S2 touches the layout, not the event page.
-> **S1 is built and waits for Shane**: branch `s1-event-page`, pull request into `usability`. It merges when he says so.
+> **Pick up here: simplification item S3, stage buttons in place of the status dropdown** (section "Simplification"
+> below). S3 changes the event page, which S1 rebuilt: branch it off `s1-event-page` if S1 is still unmerged, off
+> `usability` once it is in.
+> **S1 and S2 are built and wait for Shane**: branches `s1-event-page` (PR #4) and `s2-top-bar`, each a pull request
+> into `usability`. Each merges when he says so. They share one file, `e2e/callboard.spec.ts`, on different lines.
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
@@ -62,8 +64,8 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 | Item | Change | Cost | Status |
 |---|---|---|---|
 | S1 | A plain event page: one "Add shift" form, everything else in a "More options" fold per item, deletes in an edit mode with a confirmation | 2 to 3 days | built 2026-09-29 on `s1-event-page`, waits for Shane |
-| S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | next |
-| S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | |
+| S2 | Top bar from 12 items to 4: Events, People, Library, Settings | under a day | built 2026-09-29 on `s2-top-bar`, waits for Shane |
+| S3 | Stage buttons in place of the status dropdown; "Close event" warns who will be texted; "live" becomes automatic | about 1 day | next |
 | S4 | Phone pages with the action first: Confirm above the fold, the lead's list shows today once, "Release them" becomes "Can't reach them" with undo | 2 days | |
 | S5 | After-event and reliability features hidden until needed: lead review from 18 questions to about 2, report opens with four numbers, templates cut, tiers hidden from leads | 2 to 3 days | |
 
@@ -112,6 +114,31 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   + `headers` 11 of 11 against a production build (one new spec); `foundation:drift` clean against v1.2.0. CI did not run
   (GitHub billing).
 - Not checked: the page on a phone, keyboard order through the folds, a template's page (it is the same page).
+
+## S2, the top bar 2026-09-29 (branch `s2-top-bar`, not merged)
+- **Before and after** (`docs/usability/p-events.png`, `s2-events-after.png`, `s2-library-after.png`, `s2-settings-after.png`,
+  `s2-settings-after-phone.png`): 12 items to 4, with the org's name (it opens "Your orgs") and Account at the right. The
+  place you are in is bold.
+- **Library and Settings open a second row**, not a page of their own: Library is Job descriptions and Lead notes and opens
+  on the first; Settings is Event defaults, Members, Billing and Delete org (last) and opens on Event defaults.
+- **Why the second row is built in the layout**: the foundation's remove-a-module check only reads `{/* billing */}` markers in
+  `src/app/o/[org]/layout.tsx` (`MARKED_FILES`, a template-owned list). A Settings page of its own would have kept a dead
+  Billing link in a clone without billing. So the layout builds both rows and hands them to `nav.tsx`, the one client
+  component, which knows the address and shows the row that applies.
+- **Cut from the bar, pages kept**: Home (it only ever redirected to Events) and Templates (reached from "start from a
+  template" on the events page until S5 cuts it).
+- **Three headings renamed to match their links**: Position cards to Job descriptions, Area playbooks to Lead notes,
+  Standard rules to Event defaults. The words inside those pages are unchanged ("Save the standard", "card", "playbook").
+- **Defaults taken, all reversible, Shane to confirm**: a second row over dropdown menus (a menu needs client code to close
+  itself); Settings opens on Event defaults, the review's order, not on Members; the org name is the link to "Your orgs",
+  with no arrow or menu.
+- Skipped (add when asked): bold on the current link inside the second row, the Plan, Staff, Day of and After tabs on an
+  event (section 5 of the review, still owned by no item), the wording inside the library and settings pages.
+- No migration. No template-owned file changed.
+- Gate: lint and typecheck clean; vitest 197 of 197 (this branch has none of S1's three); e2e `callboard` + `headers` 10 of 10
+  against a production build; `foundation:drift` clean against v1.2.0; `foundation:check-modules` passes with billing removed.
+- Not checked: keyboard order through the two rows, a member who is not an owner (Billing and Delete org are hidden by the
+  same two permission checks as before).
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was

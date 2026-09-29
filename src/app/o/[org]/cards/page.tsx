@@ -36,7 +36,7 @@ export default async function Cards({ params }: { params: Promise<{ org: string 
 
   return (
     <main>
-      <h1>Position cards</h1>
+      <h1>Job descriptions</h1>
       <p>{keys.length} in the library. A card says what the job is. Uniform, location, lead and call time come from each event, so one card serves every event that uses it.</p>
       {keys.map((versions) => {
         const card = versions[0]!;
