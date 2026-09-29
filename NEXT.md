@@ -3,14 +3,14 @@
 > **Pick up here: simplification item S3, stage buttons in place of the status dropdown** (section "Simplification"
 > below). S3 changes the event page, which S1 rebuilt: branch it off `s1-event-page` if S1 is still unmerged, off
 > `usability` once it is in.
-> **S1 and S2 are built and wait for Shane**: branches `s1-event-page` (PR #4) and `s2-top-bar`, each a pull request
+> **S1 and S2 are built and wait for Shane**: branches `s1-event-page` (PR #4) and `s2-top-bar` (PR #5), each a pull request
 > into `usability`. Each merges when he says so. They share one file, `e2e/callboard.spec.ts`, on different lines.
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
 > **Held, not abandoned**: the live sheet, PR #3 (draft), branch `sheet-link`. Its notes are in that branch's NEXT.md.
-> **CI cannot run**: GitHub refuses to start jobs on this account for billing reasons, so the local gate is the only gate
-> until Shane fixes it (Settings, Billing & plans).
+> **CI runs again** (2026-09-29): run 36586741222 on S1's pull request passed in 5 minutes. The two failures before it, on
+> `sheet-link`, were the billing refusal (3 seconds each); re-run them when the live sheet is picked up.
 > Callboard is live at https://callboard.labintelligence.co behind the shared password (moved 2026-09-28).
 > Availability and the Preview switch-off shipped to main and production on 2026-09-28 (PR #1, below). Phase 3, the foundation upgrades through `v1.2.0` and swaps shipped to main and production on 2026-09-28.
 > Backlog 9 waits until it is asked for. A new path that creates, moves or reopens an assignment calls `findClash` first. Every new page, layout and route handler must
@@ -136,7 +136,8 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   event (section 5 of the review, still owned by no item), the wording inside the library and settings pages.
 - No migration. No template-owned file changed.
 - Gate: lint and typecheck clean; vitest 197 of 197 (this branch has none of S1's three); e2e `callboard` + `headers` 10 of 10
-  against a production build; `foundation:drift` clean against v1.2.0; `foundation:check-modules` passes with billing removed.
+  against a production build; `foundation:drift` clean against v1.2.0; `foundation:check-modules` passes with billing removed. CI on PR #4 (S1) passed; read PR #5's run
+  with `gh run list --limit 3` before starting S3.
 - Not checked: keyboard order through the two rows, a member who is not an owner (Billing and Delete org are hidden by the
   same two permission checks as before).
 
