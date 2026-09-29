@@ -3,7 +3,7 @@ import { advanceClock, now } from '@/core/clock';
 import { db } from '@/core/db';
 import { createCard, saveCard } from '@/app/o/[org]/cards/actions';
 import { createEvent, duplicateEvent, saveAsTemplate } from '@/app/o/[org]/events/actions';
-import { setAreaPlaybook, setEventDefaults, setPositionCard, setStatus } from '@/app/o/[org]/events/[id]/actions';
+import { saveLocation, setEventDefaults, saveRole, setStatus } from '@/app/o/[org]/events/[id]/actions';
 import { invite } from '@/app/o/[org]/events/[id]/staff/actions';
 import { createPlaybook, savePlaybook } from '@/app/o/[org]/playbooks/actions';
 import { saveStandard } from '@/app/o/[org]/rules/actions';
@@ -94,8 +94,8 @@ describe('playbooks', () => {
 
     const planned = await db.event.create({ data: { orgId: s.orgId, name: 'Autumn Expo', status: 'staffing' } });
     const area = await db.area.create({ data: { orgId: s.orgId, eventId: planned.id, name: 'Registration' } });
-    await went(setAreaPlaybook('acme', { id: s.reg.id, playbookId: v1.id }));
-    await went(setAreaPlaybook('acme', { id: area.id, playbookId: v1.id }));
+    await went(saveLocation('acme', { id: s.reg.id, playbookId: v1.id }));
+    await went(saveLocation('acme', { id: area.id, playbookId: v1.id }));
 
     await went(savePlaybook('acme', { id: v1.id, title: 'Registration', staffing: v1.staffing, failurePoints: v1.failurePoints, callOffsetMin: 60 }));
     const v2 = await db.playbook.findFirstOrThrow({ where: { key: 'registration', version: 2 } });
@@ -103,7 +103,7 @@ describe('playbooks', () => {
     expect((await db.area.findUniqueOrThrow({ where: { id: s.reg.id } })).playbookId).toBe(v1.id); // live: frozen
     expect((await db.area.findUniqueOrThrow({ where: { id: area.id } })).playbookId).toBe(v2.id); // planned: moved up
     expect(await savePlaybook('acme', { id: v1.id, title: 'Registration', equipment: '4 radios' })).toEqual({ error: expect.stringContaining('Version 2 was saved while you were editing') });
-    await went(setAreaPlaybook('acme', { id: area.id, playbookId: '' }));
+    await went(saveLocation('acme', { id: area.id, playbookId: '' }));
     expect((await db.area.findUniqueOrThrow({ where: { id: area.id } })).playbookId).toBeNull();
   });
 });
@@ -114,7 +114,7 @@ describe('event templates', () => {
     await actAs(s.dana.id, 'acme');
     await went(createCard('acme', { title: 'Greeter', duties: 'Welcome people' }));
     const card1 = await db.positionCard.findFirstOrThrow({ where: { key: 'greeter' } });
-    await went(setPositionCard('acme', { id: s.greeter.id, cardId: card1.id }));
+    await went(saveRole('acme', { id: s.greeter.id, cardId: card1.id }));
     await went(setEventDefaults('acme', { id: s.event.id, graceMin: 5, overbookPct: 50 }));
 
     expect(await went(saveAsTemplate('acme', { id: s.event.id, name: 'Expo template', attendanceBand: '250 to 1,000' }))).toBe('/o/acme/templates');

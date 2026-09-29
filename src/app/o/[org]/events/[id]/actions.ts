@@ -1,11 +1,13 @@
 'use server';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { audit } from '@/core/audit';
 import { orgAction, ref } from '@/core/authz/action';
 import { inOrg, notFoundOnP2025, type OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
+import type { Person, Prisma } from '@/generated/prisma/client';
+import { latestCards } from '@/lib/cards';
 import { AOR_HEX } from '@/lib/colors';
 import { ensurePersonLink } from '@/lib/links';
 import { notify } from '@/lib/messages';
@@ -15,7 +17,7 @@ import { ruleShapeOptional } from '@/lib/rules';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { isHm, ymd, zonedToUtc } from '@/lib/time';
 
-// The event's structure (PRD 1, PRD 2): days, AoRs and leads, areas, positions, shifts.
+// The event's structure (PRD 1, PRD 2): locations (areas) with a lead, roles (positions) and shifts.
 const page = (ctx: OrgCtx, eventId: string) => `/o/${ctx.slug}/events/${eventId}`;
 const optionalRef = (model: string) => z.union([ref(model), z.literal('')]);
 const int = (min: number, msg: string) => z.coerce.number().int().min(min, msg);
@@ -35,19 +37,6 @@ export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.
   redirect(i.status === 'closed' ? `${page(ctx, i.id)}/review` : page(ctx, i.id));
 });
 
-/** Links a position to the latest version of a library card, or unlinks it. */
-const latestOf = async (ctx: OrgCtx, cardId: string) => {
-  const picked = must(await db.positionCard.findFirst({ where: { id: cardId, ...inOrg(ctx) }, select: { key: true } }));
-  return db.positionCard.findFirstOrThrow({ where: { ...inOrg(ctx), key: picked.key }, orderBy: { version: 'desc' }, select: { id: true } });
-};
-
-export const setPositionCard = orgAction(null, z.object({ id: ref('position'), cardId: optionalRef('positionCard') }), async (ctx, i) => {
-  const p = must(await db.position.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { eventId: true } }));
-  const card = i.cardId ? await latestOf(ctx, i.cardId) : null;
-  await db.position.update({ where: { id: i.id, ...inOrg(ctx) }, data: { cardId: card?.id ?? null } });
-  redirect(page(ctx, p.eventId));
-});
-
 /** This event's own rules (PRD 6) and its emergency contact. A rule left out of the form stays as it is. */
 export const setEventDefaults = orgAction(
   null,
@@ -59,144 +48,192 @@ export const setEventDefaults = orgAction(
   },
 );
 
-/** Links an area to the latest version of a library playbook, or unlinks it. */
-export const setAreaPlaybook = orgAction(null, z.object({ id: ref('area'), playbookId: optionalRef('playbook') }), async (ctx, i) => {
-  const area = must(await db.area.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { eventId: true } }));
-  const picked = i.playbookId ? must(await db.playbook.findFirst({ where: { id: i.playbookId, ...inOrg(ctx) }, select: { key: true } })) : null;
-  const latest = picked && (await db.playbook.findFirstOrThrow({ where: { ...inOrg(ctx), key: picked.key }, orderBy: { version: 'desc' }, select: { id: true } }));
-  await db.area.update({ where: { id: i.id, ...inOrg(ctx) }, data: { playbookId: latest?.id ?? null } });
-  redirect(page(ctx, area.eventId));
-});
+/** The latest version of the library card or playbook that was picked. */
+const latestOf = async (ctx: OrgCtx, cardId: string) => {
+  const picked = must(await db.positionCard.findFirst({ where: { id: cardId, ...inOrg(ctx) }, select: { key: true } }));
+  return db.positionCard.findFirstOrThrow({ where: { ...inOrg(ctx), key: picked.key }, orderBy: { version: 'desc' }, select: { id: true } });
+};
+const latestPlaybookOf = async (ctx: OrgCtx, playbookId: string) => {
+  const picked = must(await db.playbook.findFirst({ where: { id: playbookId, ...inOrg(ctx) }, select: { key: true } }));
+  return db.playbook.findFirstOrThrow({ where: { ...inOrg(ctx), key: picked.key }, orderBy: { version: 'desc' }, select: { id: true } });
+};
 
-export const addAor = orgAction(
-  null,
-  z.object({ eventId: ref('event'), name: z.string().trim().min(1, 'Name the area of responsibility.').max(80), color: z.enum(AOR_HEX as [string, ...string[]], { message: 'Pick one of the eight colours.' }).default(AOR_HEX[0]!), radioChannel: z.string().trim().max(20).default('') }),
-  async (ctx, i) => {
-    must(await db.event.findFirst({ where: { id: i.eventId, ...inOrg(ctx) }, select: { id: true } }));
-    const a = await db.aor.create({ data: { ...inOrg(ctx), eventId: i.eventId, name: i.name, color: i.color, radioChannel: i.radioChannel } });
-    await audit(ctx, 'aor.created', { targetType: 'aor', targetId: a.id });
-    redirect(page(ctx, i.eventId));
-  },
-);
+type Tx = Prisma.TransactionClient;
+type Spot = { id: string; name: string; eventId: string; aorId: string | null };
 
-/** Lead and deputy come from the directory; a lead needs no account, only a mobile (PRD 2). A newly named lead or deputy gets their roster link at once. */
-export const setAorLead = orgAction(null, z.object({ id: ref('aor'), leadId: optionalRef('person'), deputyId: optionalRef('person') }), async (ctx, i) => {
-  const aor = must(await db.aor.findFirst({ where: { id: i.id, ...inOrg(ctx) }, include: { event: { include: { days: { orderBy: { date: 'desc' }, take: 1 } } } } }));
-  const people = await db.person.findMany({ where: { id: { in: [i.leadId, i.deputyId].filter(Boolean) }, ...inOrg(ctx) } });
-  for (const pid of [i.leadId, i.deputyId]) if (pid && !people.some((p) => p.id === pid)) notFound();
-  if (i.leadId && i.leadId === i.deputyId) throw new Refused('Lead and deputy must be different people.');
-  const lastDay = aor.event.days[0]?.date ?? new Date();
-  const expiresAt = new Date(lastDay.getTime() + 8 * 86_400_000);
-  await db.$transaction(async (tx) => {
-    await tx.aor.update({ where: { id: i.id }, data: { leadId: i.leadId || null, deputyId: i.deputyId || null } });
-    for (const pid of [i.leadId, i.deputyId]) {
-      const p = pid && pid !== aor.leadId && pid !== aor.deputyId ? people.find((x) => x.id === pid) : undefined;
-      if (!p) continue;
-      const url = await ensurePersonLink(tx, { orgId: ctx.orgId, eventId: aor.eventId, personId: p.id }, expiresAt);
-      await notify(tx, ctx.orgId, p, 'cb_lead', { name: p.name.split(' ')[0] ?? p.name, event: aor.event.name, aor: aor.name, url });
-    }
-    await audit(ctx, 'aor.lead_set', { targetType: 'aor', targetId: i.id, data: { leadId: i.leadId || null, deputyId: i.deputyId || null } }, tx);
-  });
-  await drainOutbox(5);
-  redirect(page(ctx, aor.eventId));
-});
+/** A newly named lead or deputy gets their roster link at once; they need no account, only a mobile (PRD 2). */
+async function welcome(tx: Tx, ctx: OrgCtx, team: { name: string; eventId: string }, p: Person) {
+  const event = await tx.event.findUniqueOrThrow({ where: { id: team.eventId }, select: { name: true, days: { orderBy: { date: 'desc' }, take: 1 } } });
+  const expiresAt = new Date((event.days[0]?.date ?? new Date()).getTime() + 8 * 86_400_000);
+  const url = await ensurePersonLink(tx, { orgId: ctx.orgId, eventId: team.eventId, personId: p.id }, expiresAt);
+  await notify(tx, ctx.orgId, p, 'cb_lead', { name: p.name.split(' ')[0] ?? p.name, event: event.name, aor: team.name, url });
+}
 
-export const deleteAor = orgAction(null, z.object({ id: ref('aor') }), async (ctx, { id }) => {
-  const aor = must(await db.aor.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true } }));
-  await db.aor.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025); // areas fall back to ungrouped
-  redirect(page(ctx, aor.eventId));
-});
+/**
+ * The planner picks a lead per location; the team (the Aor row) is kept for them. The location joins the team
+ * that person already leads, or its own team takes them when it has no lead or no other location, or a new
+ * team is named after the location. No lead means the location rolls up to the planner. A team left with no
+ * location is removed. Returns the location's team.
+ */
+async function setLead(tx: Tx, ctx: OrgCtx, area: Spot, lead: Person | null) {
+  const teams = await tx.aor.findMany({ where: { eventId: area.eventId, ...inOrg(ctx) }, include: { _count: { select: { areas: true } } } });
+  const current = teams.find((t) => t.id === area.aorId);
+  if (lead && current?.leadId === lead.id) return current;
+  let team = (lead && teams.find((t) => t.leadId === lead.id)) || null;
+  if (lead && !team) {
+    const made =
+      current && (!current.leadId || current._count.areas === 1)
+        ? await tx.aor.update({ where: { id: current.id }, data: { leadId: lead.id, ...(current.deputyId === lead.id && { deputyId: null }) } })
+        : await tx.aor.create({ data: { ...inOrg(ctx), eventId: area.eventId, name: area.name, color: AOR_HEX[teams.length % AOR_HEX.length]!, leadId: lead.id } });
+    await welcome(tx, ctx, made, lead);
+    await audit(ctx, 'aor.lead_set', { targetType: 'aor', targetId: made.id, data: { leadId: lead.id } }, tx);
+    if (made.id === area.aorId) return made;
+    team = { ...made, _count: { areas: 0 } };
+  }
+  await tx.area.update({ where: { id: area.id }, data: { aorId: team?.id ?? null } });
+  if (current?._count.areas === 1) await tx.aor.delete({ where: { id: current.id } });
+  return team;
+}
 
-export const addArea = orgAction(
-  null,
-  z.object({ eventId: ref('event'), name: z.string().trim().min(1, 'Name the area.').max(80), location: z.string().trim().max(200).default(''), aorId: optionalRef('aor') }),
-  async (ctx, i) => {
-    must(await db.event.findFirst({ where: { id: i.eventId, ...inOrg(ctx) }, select: { id: true } }));
-    if (i.aorId) must(await db.aor.findFirst({ where: { id: i.aorId, ...inOrg(ctx), eventId: i.eventId }, select: { id: true } }));
-    await db.area.create({ data: { ...inOrg(ctx), eventId: i.eventId, name: i.name, location: i.location, aorId: i.aorId || null } });
-    redirect(page(ctx, i.eventId));
-  },
-);
+const hm = z.string().trim().min(1, 'Start and end times are required.');
+const same = (name: string) => ({ equals: name, mode: 'insensitive' as const });
 
-export const setAreaAor = orgAction(null, z.object({ id: ref('area'), aorId: optionalRef('aor') }), async (ctx, i) => {
-  const area = must(await db.area.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { eventId: true } }));
-  if (i.aorId) must(await db.aor.findFirst({ where: { id: i.aorId, ...inOrg(ctx), eventId: area.eventId }, select: { id: true } }));
-  await db.area.update({ where: { id: i.id, ...inOrg(ctx) }, data: { aorId: i.aorId || null } });
-  redirect(page(ctx, area.eventId));
-});
-
-export const deleteArea = orgAction(null, z.object({ id: ref('area') }), async (ctx, { id }) => {
-  const area = must(await db.area.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, _count: { select: { positions: true } } } }));
-  if (area._count.positions) throw new Refused('Remove the area’s positions first.');
-  await db.area.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
-  redirect(page(ctx, area.eventId));
-});
-
-export const addPosition = orgAction(
+/**
+ * The one form: a shift, with its location and role made on the way if they are new (matched by name, any
+ * case). One day or every day. Arrive-early minutes and extra invites come from the event's defaults, and a
+ * new role takes the job description of the same name. A lead left blank leaves the location's lead alone.
+ */
+export const addShift = orgAction(
   null,
   z.object({
-    areaId: ref('area'),
-    name: z.string().trim().min(1, 'Name the position.').max(80),
-    minHeadcount: int(0, 'Minimum cannot be negative.'),
-    targetHeadcount: int(1, 'Target must be at least 1.'),
-    uniform: z.string().trim().max(200).default(''),
-    brief: z.string().trim().max(4000).default(''),
-    cardId: optionalRef('positionCard'),
-    graceMin: z.union([z.literal(''), int(0, 'Grace cannot be negative.')]).default(''), // '' = the event default
-    isFloat: z.string().optional(),
+    eventId: ref('event'),
+    location: z.string().trim().min(1, 'Say where, such as Registration.').max(80),
+    role: z.string().trim().min(1, 'Name the role, such as Greeter.').max(80),
+    dayId: z.union([ref('eventDay'), z.literal('all')]),
+    start: hm,
+    end: hm,
+    needed: int(1, 'How many must be at least 1.'),
+    leadId: optionalRef('person').default(''),
   }),
   async (ctx, i) => {
-    const area = must(await db.area.findFirst({ where: { id: i.areaId, ...inOrg(ctx) }, select: { eventId: true } }));
-    const { areaId, graceMin, isFloat, cardId, ...rest } = i;
-    const card = cardId ? await latestOf(ctx, cardId) : null;
-    if (i.minHeadcount > i.targetHeadcount) throw new Refused('Minimum cannot exceed target.');
-    await db.position.create({ data: { ...inOrg(ctx), eventId: area.eventId, areaId, ...rest, cardId: card?.id ?? null, graceMin: graceMin === '' ? null : graceMin, isFloat: isFloat === 'on' } });
+    // Rows first, values second: "not yours" must win over "bad input" (INV-02/03).
+    const event = must(await db.event.findFirst({ where: { id: i.eventId, ...inOrg(ctx) }, include: { days: true } }));
+    const days = i.dayId === 'all' ? event.days : [must(event.days.find((d) => d.id === i.dayId))];
+    const lead = i.leadId ? must(await db.person.findFirst({ where: { id: i.leadId, ...inOrg(ctx) } })) : null;
+    if (!isHm(i.start) || !isHm(i.end)) throw new Refused('Times must be HH:MM (24-hour).');
+    const card = (await latestCards(ctx.orgId)).find((c) => c.title.toLowerCase() === i.role.toLowerCase());
+    const scope = { ...inOrg(ctx), eventId: event.id };
+    await db.$transaction(async (tx) => {
+      const area = (await tx.area.findFirst({ where: { ...scope, name: same(i.location) } })) ?? (await tx.area.create({ data: { ...scope, name: i.location } }));
+      if (lead) await setLead(tx, ctx, area, lead);
+      const position =
+        (await tx.position.findFirst({ where: { ...scope, areaId: area.id, name: same(i.role) } })) ??
+        (await tx.position.create({ data: { ...scope, areaId: area.id, name: i.role, targetHeadcount: i.needed, cardId: card?.id ?? null } }));
+      for (const d of days) {
+        const startAt = zonedToUtc(ymd(d.date), i.start, event.timezone);
+        let endAt = zonedToUtc(ymd(d.date), i.end, event.timezone);
+        if (endAt <= startAt) endAt = new Date(endAt.getTime() + 86_400_000); // crosses midnight: belongs to the day it starts
+        const callAt = new Date(startAt.getTime() - event.callOffsetMin * 60_000);
+        await tx.shift.create({ data: { ...scope, positionId: position.id, dayId: d.id, startAt, endAt, callAt, needed: i.needed, overbookPct: event.overbookPct } });
+      }
+    });
+    if (lead) await drainOutbox(5);
+    redirect(page(ctx, event.id));
+  },
+);
+
+const text = (max: number) => z.string().trim().max(max).optional();
+
+/** One Save per location. A field left out of the form stays as it is; deputy and radio belong to the lead's team. */
+export const saveLocation = orgAction(
+  null,
+  z.object({
+    id: ref('area'),
+    name: z.string().trim().min(1, 'Name the location.').max(80).optional(),
+    location: text(200),
+    leadId: optionalRef('person').optional(),
+    deputyId: optionalRef('person').optional(),
+    radioChannel: text(20),
+    playbookId: optionalRef('playbook').optional(),
+  }),
+  async (ctx, { id, leadId, deputyId, radioChannel, playbookId, ...rest }) => {
+    const area = must(await db.area.findFirst({ where: { id, ...inOrg(ctx) } }));
+    const people = await db.person.findMany({ where: { id: { in: [leadId, deputyId].filter((x): x is string => !!x) }, ...inOrg(ctx) } });
+    const person = (pid?: string) => (pid ? must(people.find((p) => p.id === pid)) : null);
+    const [lead, deputy] = [person(leadId), person(deputyId)];
+    const playbook = playbookId ? await latestPlaybookOf(ctx, playbookId) : null;
+    await db.$transaction(async (tx) => {
+      await tx.area.update({ where: { id }, data: { ...rest, ...(playbookId !== undefined && { playbookId: playbook?.id ?? null }) } });
+      const team = leadId === undefined ? area.aorId && (await tx.aor.findUnique({ where: { id: area.aorId } })) : await setLead(tx, ctx, area, lead);
+      if (deputy && !team) throw new Refused('Pick a lead before a deputy.');
+      if (!team || (deputyId === undefined && radioChannel === undefined)) return;
+      if (deputy && deputy.id === team.leadId) throw new Refused('Lead and deputy must be different people.');
+      await tx.aor.update({ where: { id: team.id }, data: { radioChannel, ...(deputyId !== undefined && { deputyId: deputy?.id ?? null }) } });
+      if (deputy && deputy.id !== team.deputyId) await welcome(tx, ctx, team, deputy);
+    });
+    await drainOutbox(5);
     redirect(page(ctx, area.eventId));
   },
 );
 
-export const deletePosition = orgAction(null, z.object({ id: ref('position') }), async (ctx, { id }) => {
-  const p = must(await db.position.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, _count: { select: { shifts: true } } } }));
-  if (p._count.shifts) throw new Refused('Remove the position’s shifts first.');
-  await db.position.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
-  redirect(page(ctx, p.eventId));
-});
-
-/** One shift, or the same pattern on every day of the event. Call time comes from the offset, never typed twice. */
-export const addShift = orgAction(
+/** One Save per role. A field left out of the form stays as it is; the job description lands on its latest version. */
+export const saveRole = orgAction(
   null,
   z.object({
-    positionId: ref('position'),
-    dayId: z.union([ref('eventDay'), z.literal('all')]),
-    start: z.string().trim().min(1, 'Start time is required.'),
-    end: z.string().trim().min(1, 'End time is required.'),
-    needed: int(1, 'Needed must be at least 1.'),
-    callOffsetMin: int(0, 'Call offset cannot be negative.'),
-    overbookPct: int(0, 'Overbook cannot be negative.').default(20),
+    id: ref('position'),
+    name: z.string().trim().min(1, 'Name the role.').max(80).optional(),
+    targetHeadcount: int(1, 'How many must be at least 1.').optional(),
+    minHeadcount: int(0, 'Minimum cannot be negative.').optional(),
+    uniform: text(200),
+    brief: text(4000),
+    cardId: optionalRef('positionCard').optional(),
+    graceMin: z.union([z.literal(''), int(0, 'Minutes cannot be negative.')]).optional(), // '' = the event default
+    isFloat: z.enum(['on', 'off']).optional(),
   }),
-  async (ctx, i) => {
-    // Rows first, values second: "not yours" must win over "bad input" (INV-02/03).
-    const position = must(await db.position.findFirst({ where: { id: i.positionId, ...inOrg(ctx) }, include: { event: { include: { days: true } } } }));
-    const days = i.dayId === 'all' ? position.event.days : [must(position.event.days.find((d) => d.id === i.dayId))];
-    if (!isHm(i.start) || !isHm(i.end)) throw new Refused('Times must be HH:MM (24-hour).');
-    const tz = position.event.timezone;
-    await db.$transaction(
-      days.map((d) => {
-        const startAt = zonedToUtc(ymd(d.date), i.start, tz);
-        let endAt = zonedToUtc(ymd(d.date), i.end, tz);
-        if (endAt <= startAt) endAt = new Date(endAt.getTime() + 86_400_000); // crosses midnight: belongs to the day it starts
-        return db.shift.create({
-          data: { ...inOrg(ctx), eventId: position.eventId, positionId: position.id, dayId: d.id, startAt, endAt, callAt: new Date(startAt.getTime() - i.callOffsetMin * 60_000), needed: i.needed, overbookPct: i.overbookPct },
-        });
-      }),
-    );
-    redirect(page(ctx, position.eventId));
+  async (ctx, { id, cardId, graceMin, isFloat, ...rest }) => {
+    const p = must(await db.position.findFirst({ where: { id, ...inOrg(ctx) } }));
+    const card = cardId ? await latestOf(ctx, cardId) : null;
+    if ((rest.minHeadcount ?? p.minHeadcount) > (rest.targetHeadcount ?? p.targetHeadcount)) throw new Refused('The minimum cannot be more than how many you want.');
+    await db.position.update({
+      where: { id, ...inOrg(ctx) },
+      data: { ...rest, ...(cardId !== undefined && { cardId: card?.id ?? null }), ...(graceMin !== undefined && { graceMin: graceMin === '' ? null : graceMin }), ...(isFloat && { isFloat: isFloat === 'on' }) },
+    });
+    redirect(page(ctx, p.eventId));
   },
 );
+
+/** One Save per shift. Arrive-early minutes move the call time, which every no-show rule keys off. */
+export const saveShift = orgAction(
+  null,
+  z.object({ id: ref('shift'), needed: int(1, 'How many must be at least 1.').optional(), callOffsetMin: int(0, 'Minutes cannot be negative.').optional(), overbookPct: int(0, 'Extra invites cannot be negative.').optional() }),
+  async (ctx, { id, callOffsetMin, ...rest }) => {
+    const s = must(await db.shift.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, startAt: true } }));
+    await db.shift.update({ where: { id, ...inOrg(ctx) }, data: { ...rest, ...(callOffsetMin !== undefined && { callAt: new Date(s.startAt.getTime() - callOffsetMin * 60_000) }) } });
+    redirect(page(ctx, s.eventId));
+  },
+);
+
+// Deletes only show in edit mode, behind a confirmation, so each one lands back in edit mode.
+const editing = (ctx: OrgCtx, eventId: string) => `${page(ctx, eventId)}?edit=1`;
+
+export const deleteArea = orgAction(null, z.object({ id: ref('area') }), async (ctx, { id }) => {
+  const area = must(await db.area.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, aorId: true, _count: { select: { positions: true } } } }));
+  if (area._count.positions) throw new Refused('Delete the location’s roles first.');
+  await db.area.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
+  if (area.aorId) await db.aor.deleteMany({ where: { id: area.aorId, ...inOrg(ctx), areas: { none: {} } } }); // a team with no location left
+  redirect(editing(ctx, area.eventId));
+});
+
+export const deletePosition = orgAction(null, z.object({ id: ref('position') }), async (ctx, { id }) => {
+  const p = must(await db.position.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, _count: { select: { shifts: true } } } }));
+  if (p._count.shifts) throw new Refused('Delete the role’s shifts first.');
+  await db.position.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
+  redirect(editing(ctx, p.eventId));
+});
 
 export const deleteShift = orgAction(null, z.object({ id: ref('shift') }), async (ctx, { id }) => {
   const s = must(await db.shift.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, _count: { select: { assignments: true } } } }));
   if (s._count.assignments) throw new Refused('Release the people on this shift first (Staff page).');
   await db.shift.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
-  redirect(page(ctx, s.eventId));
+  redirect(editing(ctx, s.eventId));
 });

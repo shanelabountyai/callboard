@@ -10,7 +10,7 @@ const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 test.afterAll(() => db.end());
 test.beforeAll(async () => {
   await db.query('DELETE FROM "RateLimit"');
-  await db.query(`DELETE FROM "Event" WHERE name IN ('Spring Expo', 'Autumn Expo', 'Expo template')`); // a fresh expo every run; people are upserted
+  await db.query(`DELETE FROM "Event" WHERE name IN ('Spring Expo', 'Autumn Expo', 'Expo template', 'Plain Gala')`); // a fresh expo every run; people are upserted
   await db.query('DELETE FROM "Playbook"'); // the library test starts from the seeded library and the default rules
   await db.query('DELETE FROM "OrgRules"');
   await db.query('UPDATE "Person" SET "wantsBackAt" = NULL');
@@ -222,9 +222,9 @@ test('the library: a rule change marks what deviates, a template starts an event
   await tpl.getByLabel('First day').fill('2027-10-01');
   await tpl.getByRole('button', { name: 'Start an event from Expo template' }).click();
   await expect(page.getByRole('heading', { name: 'Autumn Expo', level: 1 })).toBeVisible();
-  await expect(page.getByText('Rules for this event (all standard)')).toBeVisible();
+  await expect(page.getByText('Event defaults for this event (all standard)')).toBeVisible();
   await expect(page.getByText('Fri, Oct 1, Sat, Oct 2')).toBeVisible();
-  await expect(page.getByLabel('Playbook for Registration')).not.toHaveValue('');
+  await expect(page.getByLabel('Lead notes for Registration')).not.toHaveValue('');
 
   // Tom checked in at the expo, so the close thanked him; one tap puts him first in his tier on the next event's list.
   const { rows } = await db.query(`SELECT body FROM "CapturedMessage" WHERE "to" = '+15550100006' AND body LIKE '%counted in%' ORDER BY "createdAt" DESC LIMIT 1`);
@@ -300,4 +300,54 @@ test('swap: a person asks, the colleague accepts, the lead approves, and the two
   await expect(tomsPhone.locator('article').filter({ hasText: 'Info · Info Desk' })).toBeVisible();
   const { rows: [text] } = await db.query(`SELECT body FROM "CapturedMessage" WHERE "to" = '+15550100006' ORDER BY "createdAt" DESC LIMIT 1`);
   expect(text.body).toContain('is approved. You now have Info');
+});
+
+test('the plain event page: one form adds a shift with its location, role and lead; a delete waits behind edit mode and a confirmation', async ({ page }) => {
+  await signInAsAcmeOwner(page);
+  await expect(page.getByRole('main').getByText(/^Delete/)).toHaveCount(0); // not one on Spring Expo until edit mode
+
+  await page.getByRole('link', { name: 'Events' }).first().click();
+  const fresh = page.locator('form').filter({ has: page.getByRole('button', { name: 'Create event' }) });
+  await fresh.getByLabel('Name').fill('Plain Gala');
+  await fresh.getByLabel('First day').fill('2027-11-05');
+  await fresh.getByLabel('Last day').fill('2027-11-05');
+  await fresh.getByRole('button', { name: 'Create event' }).click();
+  await expect(page.getByRole('heading', { name: 'Plain Gala', level: 1 })).toBeVisible();
+  await expect(page.getByText(/^No shifts yet/)).toBeVisible();
+
+  const add = page.locator('form').filter({ has: page.getByRole('button', { name: 'Add shift' }) });
+  await add.getByLabel('Location', { exact: true }).fill('Cloakroom');
+  await add.getByLabel('Role', { exact: true }).fill('Coat check');
+  await add.getByLabel('Lead for this location').selectOption({ label: 'Marcus Bell' });
+  await add.getByRole('button', { name: 'Add shift' }).click();
+  const cloak = page.locator('section').filter({ has: page.getByRole('heading', { name: /^Cloakroom/ }) });
+  await expect(cloak.getByRole('heading', { name: /^Cloakroom/ })).toContainText('led by Marcus Bell');
+  await expect(cloak.getByRole('listitem')).toContainText(['8:00 AM to 12:00 PM']);
+  await expect(cloak).toContainText('0/2 confirmed');
+
+  // The role's own link fills the form in; the same names add to what is there.
+  await cloak.getByRole('link', { name: 'Add another Coat check shift' }).click();
+  await expect(add.getByLabel('Location', { exact: true })).toHaveValue('Cloakroom');
+  await add.getByLabel('Start').fill('13:00');
+  await add.getByLabel('End').fill('17:00');
+  await add.getByRole('button', { name: 'Add shift' }).click();
+  await expect(cloak.getByRole('listitem')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: /^Cloakroom/ })).toHaveCount(1);
+
+  await cloak.getByText('More options for Coat check').click();
+  await cloak.getByLabel('What to wear').fill('Black polo');
+  await cloak.getByRole('button', { name: 'Save Coat check' }).click();
+  await expect(cloak.getByRole('heading', { name: /^Coat check/ })).toContainText('wear Black polo');
+
+  await expect(page.getByRole('main').getByText(/^Delete/)).toHaveCount(0);
+  await page.getByRole('link', { name: /^Edit/ }).click();
+  await expect(cloak.getByText('Delete shift')).toHaveCount(2);
+  await cloak.getByText('Delete role').click();
+  await expect(cloak.getByText('Delete its shifts first.')).toBeVisible(); // says why, instead of failing
+  await cloak.getByText('Delete shift').first().click();
+  await cloak.getByRole('button', { name: /^Yes, delete the Coat check shift/ }).click();
+  await expect(cloak.getByRole('listitem')).toHaveCount(1);
+  await expect(cloak.getByRole('listitem')).toContainText(['1:00 PM to 5:00 PM']);
+  await page.getByRole('link', { name: 'Done' }).click(); // the delete landed back in edit mode
+  await expect(page.getByRole('main').getByText(/^Delete/)).toHaveCount(0);
 });
