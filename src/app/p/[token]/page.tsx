@@ -10,8 +10,6 @@ import { aor as stripe } from '@/lib/colors';
 import { dueAt, EARLY_MS, HELP_CATEGORIES, isOverdue } from '@/lib/dayof';
 import { readPersonLink } from '@/lib/links';
 import { PlaybookView } from '@/lib/playbook-view';
-import { shownTier, tiersFor } from '@/lib/review';
-import { TierPill } from '@/lib/review-fields';
 import { assignmentInclude, firstName } from '@/lib/staffing';
 import { isLive, OPEN_SWAP, SWAP_SAYS, swapInclude, swappable, type SwapSays } from '@/lib/swaps';
 import { fmtDay, fmtTime, fmtWhen, ymd } from '@/lib/time';
@@ -62,9 +60,6 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
     }),
     db.broadcastRecipient.findMany({ where: { orgId, personId: person.id, broadcast: { eventId: event.id } }, include: { broadcast: true }, orderBy: { broadcast: { createdAt: 'desc' } }, take: 10 }),
   ]);
-  // Tiers are for leads and planners only (PRD 6): computed for a lead's crew, never rendered on anyone's own card.
-  const crew = leads.flatMap((aor) => aor.areas.flatMap((ar) => ar.positions.flatMap((p) => p.shifts.flatMap((s) => s.assignments.map((x) => x.personId)))));
-  const tiers = crew.length ? await tiersFor(orgId, crew) : new Map();
   // Swaps (PRD 3): mine, the ones asked of me, and the agreed ones waiting on me as a lead.
   const myAorIds = leads.map((x) => x.id);
   const swaps = (await db.swap.findMany({
@@ -233,7 +228,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
           return (
             <li key={x.id} className="row" data-late={late ? '' : undefined}>
               <span className="grow">
-                {x.person.name} <TierPill t={shownTier(x.person, tiers)} /> · <a href={`tel:${x.person.mobile}`}>{x.person.mobile}</a>
+                {x.person.name} · <a href={`tel:${x.person.mobile}`}>{x.person.mobile}</a>
                 {late ? <> · {pos.name}, arrive by {fmtTime(s.callAt, tz)}</> : <> · <span className="pill" data-status={x.status}>{x.status}</span></>}
                 {x.checkedInAt && <> · <strong>here {fmtTime(x.checkedInAt, tz)}</strong></>}
                 {x.checkedOutAt && <> · out {fmtTime(x.checkedOutAt, tz)}{x.checkOutMethod === 'auto' && ' (auto)'}</>}
@@ -278,7 +273,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
         return (
           <section key={aor.id} className="stripe" style={stripe(aor.color)}>
             <h2>You {aor.leadId === person.id ? 'lead' : 'are deputy for'} {aor.name}</h2>
-            {event.status === 'closed' && <p><a href={`/p/${token}/review`}><strong>Review your crew</strong></a> (about three minutes): who showed, and what to fix next time.</p>}
+            {event.status === 'closed' && <p><a href={`/p/${token}/review`}><strong>Review your crew</strong></a> (about a minute): anyone you would not have back, and anything to fix next time.</p>}
             {cards.map((al) => (
               <article key={al.id} className="alert pair" data-severity={al.severity >= 3 ? 'high' : 'normal'}>
                 <p className="grow">

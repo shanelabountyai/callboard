@@ -25,14 +25,13 @@ export default async function Review({ params }: { params: Promise<{ org: string
   const age = closed ? now().getTime() - event.closedAt!.getTime() : 0;
   const open = areas.filter((a) => !a.review);
   const groups = [...new Set(areas.map((a) => a.aor?.name ?? 'Ungrouped (planner)'))].sort();
-  const people = (list: typeof areas) => list.flatMap((a) => a.positions.flatMap((p) => p.shifts.flatMap((s) => s.assignments)));
 
   return (
     <main>
       <p className="crumbs"><Link href={`/o/${ctx.slug}/events/${event.id}`}>{event.name}</Link> <span>Review</span></p>
       <h1>Review: {event.name}</h1>
       {!closed ? (
-        <p>The review opens when the event is closed. Closing it texts each lead their review link; what happened is pre-filled from check-in.</p>
+        <p>The review opens when the event is closed. Closing it texts each lead their review link.</p>
       ) : (
         <>
           <p data-tone={open.length === 0 ? 'green' : age > REVIEW_DUE_MS ? 'red' : 'amber'}>
@@ -41,7 +40,7 @@ export default async function Review({ params }: { params: Promise<{ org: string
               : `${open.length} of ${areas.length} areas still open${age > REVIEW_ASK_MS ? ', more than a week on: finish them from the check-in data or waive them' : age > REVIEW_DUE_MS ? ', past the 72 hours leads were given' : ''}.`}
           </p>
           <table>
-            <thead><tr><th>Area of responsibility</th><th>Areas reviewed</th><th>People reviewed</th></tr></thead>
+            <thead><tr><th>Area of responsibility</th><th>Areas reviewed</th></tr></thead>
             <tbody>
               {groups.map((g) => {
                 const mine = areas.filter((a) => (a.aor?.name ?? 'Ungrouped (planner)') === g);
@@ -50,7 +49,6 @@ export default async function Review({ params }: { params: Promise<{ org: string
                   <tr key={g}>
                     <td>{g}</td>
                     <td className="cov" data-tone={done === mine.length ? 'green' : 'red'}>{done} of {mine.length}</td>
-                    <td>{people(mine).filter((x) => x.review).length} of {people(mine).length}</td>
                   </tr>
                 );
               })}
@@ -69,7 +67,7 @@ export default async function Review({ params }: { params: Promise<{ org: string
               <details open={!area.review}>
                 <summary>{area.review ? 'See or change the review' : 'Finish this review'}</summary>
                 <ActionForm action={bind(saveAreaReview)}>
-                  <ReviewFields area={area} event={event} />
+                  <ReviewFields area={area} event={event} outcomes />
                   <button type="submit" className="primary">Save review for {area.name}</button>
                 </ActionForm>
               </details>

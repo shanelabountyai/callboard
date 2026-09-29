@@ -1,6 +1,5 @@
 import { pathToFileURL } from 'node:url';
 import { db } from '@/core/db'; // refuses a cloud database (INV-18)
-import { copyEvent } from '@/lib/templates';
 import { zonedToUtc } from '@/lib/time';
 
 // Demo staffing data for the Acme org: a two-day expo with two AoRs, a directory of employees
@@ -30,7 +29,7 @@ const CARDS: { title: string; purpose: string; duties: string[]; situations: str
   { title: 'Floor runner', purpose: 'Keeps the exhibit floor moving.', duties: ['Walk the aisles', 'Help exhibitors with power and supplies', 'Report anything blocking an aisle'], situations: ['An exhibitor has no power: radio your lead with the booth number'], never: 'Move an exhibitor’s stock without them.', demands: 'Lifting up to 15 kg; a lot of walking.' },
   { title: 'Floater', purpose: 'Goes where a position is short.', duties: ['Wait at the ops desk', 'Go where the planner sends you', 'Read the card for the position you are sent to'], situations: [], never: 'Wander off: the planner needs to find you in a minute.', demands: '' },
 ];
-// The rest of the library (PRD 6): how Registration is run, the house rules, and the expo saved as a template.
+// The rest of the library (PRD 6): how Registration is run, and the house rules.
 const PLAYBOOK = {
   title: 'Registration',
   staffing: ['Greeter 7:30 to 9am: min 2, target 3', 'Greeter 9am to close: min 1, target 2', 'Badge printer all day: min 1, target 2'],
@@ -56,10 +55,6 @@ async function seedLibrary(orgId: string, userId: string) {
   await db.area.updateMany({ where: { orgId, name: 'Registration', playbookId: null }, data: { playbookId: playbook.id } });
   await db.orgRules.upsert({ where: { orgId }, create: { orgId, ...HOUSE_RULES }, update: {} });
   await db.event.updateMany({ where: { orgId, breaks: '', minors: '', moves: '' }, data: HOUSE_RULES }); // events seeded before the rules existed
-  const expo = await db.event.findFirst({ where: { orgId, name: 'Spring Expo' } });
-  if (expo && !(await db.event.findFirst({ where: { orgId, isTemplate: true, name: 'Expo template' } }))) {
-    await db.$transaction((tx) => copyEvent(tx, { orgId, userId }, expo.id, { name: 'Expo template', asTemplate: { band: '250 to 1,000' } }), { timeout: 30_000 });
-  }
 }
 
 // Past events give the directory a history, so tiers mean something in the demo: who showed, who was late, who never came.

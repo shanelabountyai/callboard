@@ -25,7 +25,7 @@ export default async function Rules({ params }: { params: Promise<{ org: string 
       </ActionForm>
 
       <h2>Events that deviate</h2>
-      {off.length === 0 ? <p>None. Every event and template is on the standard.</p> : (
+      {off.length === 0 ? <p>None. Every event is on the standard.</p> : (
         <table>
           <thead><tr><th>Event</th><th>Status</th><th>Differs on</th></tr></thead>
           <tbody>

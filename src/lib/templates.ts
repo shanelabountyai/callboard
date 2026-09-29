@@ -6,17 +6,14 @@ import type { Prisma } from '@/generated/prisma/client';
 import { pickRules } from './rules';
 import { isYmd, ymd } from './time';
 
-// Event templates (PRD 6, PRD 1). A template is an event nobody staffs (`isTemplate`), so its editor is
-// the event editor and starting an event from it is the same copy that duplicates an event. Copies never
-// link back: the new event has its own rows, and editing either side leaves the other alone.
-export const BANDS = ['Under 250', '250 to 1,000', '1,000 to 5,000', 'Over 5,000'] as const;
-
-type Opts = { name: string; startsOn?: string; asTemplate?: { band: string } };
+// Starting an event from an earlier one (PRD 1). The copy never links back: the new event has its own
+// rows, and editing either side leaves the other alone. Saved templates were cut (S5): an earlier event is
+// the template. Rows saved before that (`isTemplate`) stay in the database, hidden and never staffed.
+type Opts = { name: string; startsOn?: string };
 
 /**
  * Days, AoRs, areas, positions, shifts and the rule set come across with every date shifted so the first
  * day lands on `startsOn`; assignments never do. Cards and playbooks move to their latest version.
- * A template leaves lead and deputy as slots to fill (PRD 2).
  * The caller has already checked the event is theirs: this file stays free of `next/*` so the seed can use it.
  */
 export async function copyEvent(tx: Prisma.TransactionClient, ctx: Pick<OrgCtx, 'orgId' | 'userId'>, srcId: string, o: Opts): Promise<string> {
@@ -36,14 +33,14 @@ export async function copyEvent(tx: Prisma.TransactionClient, ctx: Pick<OrgCtx, 
 
   const e = await tx.event.create({
     data: {
-      ...inOrg(ctx), name: o.name, venue: src.venue, timezone: src.timezone, emergencyContact: o.asTemplate ? '' : src.emergencyContact, ...pickRules(src),
-      isTemplate: !!o.asTemplate, attendanceBand: o.asTemplate?.band ?? src.attendanceBand, templateId: src.isTemplate && !o.asTemplate ? src.id : null,
+      ...inOrg(ctx), name: o.name, venue: src.venue, timezone: src.timezone, emergencyContact: src.emergencyContact, ...pickRules(src),
+      attendanceBand: src.attendanceBand, templateId: src.isTemplate ? src.id : null,
     },
   });
   const dayIds = new Map<string, string>();
   for (const d of src.days) dayIds.set(d.id, (await tx.eventDay.create({ data: { ...inOrg(ctx), eventId: e.id, date: at(d.date) } })).id);
   const aorIds = new Map<string, string>();
-  for (const { id, ...a } of src.aors) aorIds.set(id, (await tx.aor.create({ data: { ...a, eventId: e.id, ...(o.asTemplate && { leadId: null, deputyId: null }) } })).id);
+  for (const { id, ...a } of src.aors) aorIds.set(id, (await tx.aor.create({ data: { ...a, eventId: e.id } })).id);
   const areaIds = new Map<string, string>();
   for (const { id, aorId, playbook, ...a } of src.areas) {
     areaIds.set(id, (await tx.area.create({ data: { ...a, eventId: e.id, aorId: aorId ? aorIds.get(aorId) : null, playbookId: playbook ? playbooks.get(playbook.key) : null } })).id);
@@ -58,7 +55,6 @@ export async function copyEvent(tx: Prisma.TransactionClient, ctx: Pick<OrgCtx, 
       callAt: at(s.callAt), startAt: at(s.startAt), endAt: at(s.endAt),
     })),
   });
-  const action = o.asTemplate ? 'template.saved' : src.isTemplate ? 'event.from_template' : 'event.duplicated';
-  await audit(ctx, action, { targetType: 'event', targetId: e.id, data: { from: src.id, ...(firstDay && { firstDay: ymd(firstDay) }) } }, tx);
+  await audit(ctx, src.isTemplate ? 'event.from_template' : 'event.duplicated', { targetType: 'event', targetId: e.id, data: { from: src.id, ...(firstDay && { firstDay: ymd(firstDay) }) } }, tx);
   return e.id;
 }
