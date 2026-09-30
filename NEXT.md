@@ -13,6 +13,9 @@
 > **To look locally use `npm run dev`**, never a plain `npm run build`: a production build reads `.env.production.local`
 > and the cloud-database guard refuses it (INV-18). Phone links in the dev database die with a reseed; mint new ones
 > with `ensurePersonLink` from `src/lib/links.ts`.
+> **The e2e failure alarm did not fire** on the 2026-09-29 sweep, not even on its `EXIT=` line, though the same filter
+> run by hand against the finished log matches; cause unknown. Before the next sweep relies on an alarm, prove it on a
+> spec made to fail. The results above were read from the log itself.
 > **Merging to main no longer deploys** (`77057d2`, `deploymentEnabled: false`): production moves only when the
 > main-manual deploy hook is called. After the merge the queue is backlog 11, the live sheet, rebased into the new event page.
 > If the five are merged one by one instead, the order is S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7),
