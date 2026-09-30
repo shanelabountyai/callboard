@@ -3,9 +3,10 @@
 > **Pick up here: backlog 11, the live sheet.** PR #3 (draft, branch `sheet-link`) is rebased into the new event page
 > from S1, or rebuilt against it if the rebase is worse than a rewrite; its notes are in that branch's NEXT.md. Before
 > it, answer the deploy question below if it is still open.
-> **Simplification S1 to S5 shipped to main 2026-09-30** on PR #9 (`usability-all`, the five merged in order S1, S3,
-> S2, S4, S5; PRs #4 to #8 closed unmerged, their branches kept). Shane looked at the five together on :4600 on
-> 2026-09-29 and said go. No migration. Gate: lint, typecheck, `foundation:drift` clean; vitest 204 of 204 (3 of them
+> **Simplification S1 to S5 is on main once PR #9 is merged** (`usability-all`, the five merged in order S1, S3, S2,
+> S4, S5; CI green on `6362416`). Shane looked at the five together on :4600 on 2026-09-29 and said go; the session's
+> fast-forward of main was refused by the permission classifier (merge without review), so the merge is Shane's click
+> on PR #9. After it, close PRs #4 to #8 unmerged and keep their branches. No migration. Gate: lint, typecheck, `foundation:drift` clean; vitest 204 of 204 (3 of them
 > alone after a timeout at load 30); e2e `callboard` + `headers` 11 of 11 against a production build; CI on PR #9 green.
 > **Production is NOT deployed yet**: main no longer deploys by itself (`77057d2`, `deploymentEnabled: false`). The
 > main-manual deploy hook moves it, a POST to the URL in that commit's message. The live site still shows templates,
