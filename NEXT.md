@@ -1,32 +1,25 @@
 # NEXT
 
-> **Pick up here: nothing is left to build in the simplification. All five items wait for Shane to look and say merge.**
-> **The five together are on `usability-all`** (2026-09-29, pushed, no pull request yet): `usability` plus S1, S3, S2, S4, S5
-> merged in that order, conflicts resolved as the notes below said (S1's event page without the template fold, S2's top
-> bar, S5's report page, S5's shift move followed by S3's close steps in the spec). It is the branch to look at, and the
-> one to merge: a pull request from it into main carries all five and makes PRs #4 to #8 redundant. It meets main with
-> no conflict and has no migration. Gate on it: lint, typecheck and `foundation:drift` clean; vitest 204 of 204 (201 in
-> the full run at load 30, the invariant file's 3 timed out there and passed alone, 14 of 14); e2e `callboard` +
-> `headers` 11 of 11 against a fresh production build. CI has not run on it (CI runs on pull requests and main).
-> **Decided by Shane 2026-09-29**: look at the five together first (over merging to main, and over merging and
-> deploying). Not to be asked again; the next word from him is merge, deploy, or what to change.
+> **Pick up here: backlog 11, the live sheet.** PR #3 (draft, branch `sheet-link`) is rebased into the new event page
+> from S1, or rebuilt against it if the rebase is worse than a rewrite; its notes are in that branch's NEXT.md. Before
+> it, answer the deploy question below if it is still open.
+> **Simplification S1 to S5 shipped to main 2026-09-30** on PR #9 (`usability-all`, the five merged in order S1, S3,
+> S2, S4, S5; PRs #4 to #8 closed unmerged, their branches kept). Shane looked at the five together on :4600 on
+> 2026-09-29 and said go. No migration. Gate: lint, typecheck, `foundation:drift` clean; vitest 204 of 204 (3 of them
+> alone after a timeout at load 30); e2e `callboard` + `headers` 11 of 11 against a production build; CI on PR #9 green.
+> **Production is NOT deployed yet**: main no longer deploys by itself (`77057d2`, `deploymentEnabled: false`). The
+> main-manual deploy hook moves it, a POST to the URL in that commit's message. The live site still shows templates,
+> the 12-item bar and the old phone pages until then. When it is deployed, check the leads on the demo events
+> (`seed:prod` needs no rerun: nothing in the seed changed shape) and delete the "Expo template" row by hand if it is
+> in the way (it is hidden from every list; see S5 below).
+> **What the merge cost**: "Save as a template" and the Templates page are gone ("Start a new event from this one"
+> replaces them); a lead cannot release anyone from the phone; `setStatus` takes `staffing` or `closed` only.
 > **To look locally use `npm run dev`**, never a plain `npm run build`: a production build reads `.env.production.local`
 > and the cloud-database guard refuses it (INV-18). Phone links in the dev database die with a reseed; mint new ones
 > with `ensurePersonLink` from `src/lib/links.ts`.
 > **The e2e failure alarm did not fire** on the 2026-09-29 sweep, not even on its `EXIT=` line, though the same filter
 > run by hand against the finished log matches; cause unknown. Before the next sweep relies on an alarm, prove it on a
 > spec made to fail. The results above were read from the log itself.
-> **Merging to main no longer deploys** (`77057d2`, `deploymentEnabled: false`): production moves only when the
-> main-manual deploy hook is called. After the merge the queue is backlog 11, the live sheet, rebased into the new event page.
-> If the five are merged one by one instead, the order is S1 (PR #4), S3 (PR #6, into S1), S2 (PR #5), S4 (PR #7),
-> S5 (PR #8, into S4), then `usability` into main; `git rerere` on this laptop holds the resolutions.
-> **S1 to S5 are built and wait for Shane**: branches `s1-event-page` (PR #4), `s2-top-bar` (PR #5) and `s4-phone-pages`
-> (PR #7), each a pull request into `usability`; `s3-stage-buttons` (PR #6), a pull request into `s1-event-page`; and
-> `s5-after-event` (PR #8), a pull request into `s4-phone-pages`. Each shows its own change alone. All five change
-> `e2e/callboard.spec.ts`. This file on `s5-after-event` is S4's copy plus S5, so it is the one to keep when they meet.
-> **Where S5 will conflict**: S1 rewrote the event page (S5 only deletes the "Save as a template" fold there), S2 rewrote
-> the top bar (S5 only deletes the Templates link), S3 changed the report's "not closed yet" line and the spec's close
-> steps (S5 rewrote the report page; keep S5's page and S3's close steps).
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
