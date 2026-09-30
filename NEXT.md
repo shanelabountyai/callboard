@@ -1,18 +1,17 @@
 # NEXT
 
 > **Pick up here: backlog 11, the live sheet.** PR #3 (draft, branch `sheet-link`) is rebased into the new event page
-> from S1, or rebuilt against it if the rebase is worse than a rewrite; its notes are in that branch's NEXT.md. Before
-> it, answer the deploy question below if it is still open.
-> **Simplification S1 to S5 is on main once PR #9 is merged** (`usability-all`, the five merged in order S1, S3, S2,
-> S4, S5; CI green on `6362416`). Shane looked at the five together on :4600 on 2026-09-29 and said go; the session's
-> fast-forward of main was refused by the permission classifier (merge without review), so the merge is Shane's click
-> on PR #9. After it, close PRs #4 to #8 unmerged and keep their branches. No migration. Gate: lint, typecheck, `foundation:drift` clean; vitest 204 of 204 (3 of them
-> alone after a timeout at load 30); e2e `callboard` + `headers` 11 of 11 against a production build; CI on PR #9 green.
-> **Production is NOT deployed yet**: main no longer deploys by itself (`77057d2`, `deploymentEnabled: false`). The
-> main-manual deploy hook moves it, a POST to the URL in that commit's message. The live site still shows templates,
-> the 12-item bar and the old phone pages until then. When it is deployed, check the leads on the demo events
-> (`seed:prod` needs no rerun: nothing in the seed changed shape) and delete the "Expo template" row by hand if it is
-> in the way (it is hidden from every list; see S5 below).
+> from S1, or rebuilt against it if the rebase is worse than a rewrite; its notes are in that branch's NEXT.md.
+> **Simplification S1 to S5 shipped 2026-09-30**: Shane merged PR #9 (`usability-all`, the five in order S1, S3, S2,
+> S4, S5) as `69b502b`; CI on main green (run 36732402640); PRs #4 to #8 closed unmerged, branches kept. The session's
+> own fast-forward of main was refused by the permission classifier (merge without review): a merge to main is Shane's
+> click, not the session's. **Deployed the same day** by the main-manual deploy hook (the URL is in `77057d2`'s
+> message): `callboard-5uj0l4ucv` is Ready on production. Checked on callboard.labintelligence.co: 401 without the
+> password, 200 with it; signed in as the Acme owner the bar reads Events, People, Library, Settings; no Templates
+> anywhere; the events list says Staffing and Closed with "Start a new event from this one" on each; `/o/acme/templates`
+> 404; `/p/<unknown>` 404; SMS webhook 405 on a GET; cron 401. No migration, `seed:prod` not rerun. Not clicked
+> through in production: an event page, a phone page, a close.
+> **Before the next sweep**: prove the e2e alarm on a spec made to fail (below).
 > **What the merge cost**: "Save as a template" and the Templates page are gone ("Start a new event from this one"
 > replaces them); a lead cannot release anyone from the phone; `setStatus` takes `staffing` or `closed` only.
 > **To look locally use `npm run dev`**, never a plain `npm run build`: a production build reads `.env.production.local`
