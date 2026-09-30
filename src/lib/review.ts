@@ -31,7 +31,9 @@ type Tx = Prisma.TransactionClient;
  * frees the slot; it does not erase the absence). A decline never counts, whatever the reason.
  */
 export const REVIEWABLE = { OR: [{ status: 'confirmed' }, { status: 'released', alerts: { some: { kind: 'no_show' } } }] } satisfies Prisma.AssignmentWhereInput;
-/** Areas that had shifts: the ones that owe three answers. */
+/** A shift counts once it has ended: before that, "never checked in" is not yet a no-show. Tiers, the report and the review all read it. */
+export const ended = () => ({ shift: { endAt: { lt: now() } } }) satisfies Prisma.AssignmentWhereInput;
+/** Areas that had shifts: the ones that owe a review. */
 const STAFFED = { positions: { some: { shifts: { some: {} } } } } satisfies Prisma.AreaWhereInput;
 
 type Timed = { checkedInAt: Date | null; checkedOutAt: Date | null; checkOutMethod: string; shift: { callAt: Date; endAt: Date; position: { graceMin: number | null } }; event: { graceMin: number } };
@@ -50,6 +52,8 @@ export const outcomeOf = (a: Timed & { review: { outcome: ReviewOutcome } | null
 
 export type EventRecord = { outcomes: ReviewOutcome[]; rehire: boolean | null };
 export type Tier = { tier: 1 | 2 | 3; why: string };
+/** The words a planner sees. The number stays in the code and the database (`Person.tierOverride`). */
+export const TIER_LABEL = { 1: 'Reliable', 2: 'Not enough history', 3: 'Missed shifts' } as const;
 
 /**
  * Tier from the last eight events, most recent first. 3: two or more strikes (a no-show event, or a lead
@@ -70,7 +74,7 @@ export function tierOf(records: EventRecord[]): Tier {
 /** Computed tier per person who has history. Two events on one day are two records and still one tier. */
 export async function tiersFor(orgId: string, personIds?: string[]): Promise<Map<string, Tier>> {
   const rows = await db.assignment.findMany({
-    where: { orgId, ...(personIds && { personId: { in: personIds } }), shift: { endAt: { lt: now() } }, ...REVIEWABLE },
+    where: { orgId, ...(personIds && { personId: { in: personIds } }), ...ended(), ...REVIEWABLE },
     select: {
       personId: true, eventId: true, checkedInAt: true, checkedOutAt: true, checkOutMethod: true,
       review: { select: { outcome: true, rehire: true } },
@@ -91,44 +95,60 @@ export async function tiersFor(orgId: string, personIds?: string[]): Promise<Map
   return new Map([...byPerson].map(([id, events]) => [id, tierOf([...events.values()])]));
 }
 
-/** The tier to show: the one set by hand if there is one, else the computed one. Planners and leads only, never the person. */
+/** The tier to show: the one set by hand if there is one, else the computed one. Planners only, on the People page; never a lead, never the person. */
 export function shownTier(p: { id: string; tierOverride: number | null; tierNote: string }, tiers: Map<string, Tier>): Tier & { byHand: boolean } {
   const computed = tiers.get(p.id) ?? tierOf([]);
   if (p.tierOverride !== 1 && p.tierOverride !== 2 && p.tierOverride !== 3) return { ...computed, byHand: false };
-  return { tier: p.tierOverride, why: `set by hand: ${p.tierNote} (history says tier ${computed.tier}, ${computed.why})`, byHand: true };
+  return { tier: p.tierOverride, why: `set by hand: ${p.tierNote} (history says “${TIER_LABEL[computed.tier]}”, ${computed.why})`, byHand: true };
 }
 
 // ---- the review
 
-export type ReviewInput = { people: { assignmentId: string; outcome: ReviewOutcome; rehire: boolean | null; note: string }[]; understaffed: string; overstaffed: string; wentWrong: string };
+export type ReviewInput = { people: { assignmentId: string; outcome: ReviewOutcome | null; rehire: false | null }[]; note: string };
 
-/** Reads the review form: `o:<assignment>` outcome, `r:<assignment>` yes / no / blank, `n:<assignment>` note, and the three answers. */
+/**
+ * Reads the review form: `p:<assignment>` for everyone listed, `no:<assignment>` ticked for "would not have
+ * back", one `note`, and `o:<assignment>` for what happened, which only the planner's form sends.
+ */
 export function parseReview(form: Record<string, unknown>): ReviewInput {
   const str = (k: string, max: number) => String(form[k] ?? '').trim().slice(0, max);
-  const people = Object.keys(form).filter((k) => k.startsWith('o:')).map((k) => k.slice(2)).filter((id) => z.uuid().safeParse(id).success).map((id) => {
-    const outcome = OUTCOMES.find((o) => o === str(`o:${id}`, 20));
-    if (!outcome) throw new Refused('Pick what happened for everyone listed.');
-    const r = str(`r:${id}`, 3);
-    return { assignmentId: id, outcome, rehire: r === 'yes' ? true : r === 'no' ? false : null, note: str(`n:${id}`, 500) };
+  const people = Object.keys(form).filter((k) => k.startsWith('p:')).map((k) => k.slice(2)).filter((id) => z.uuid().safeParse(id).success).map((id) => {
+    const o = str(`o:${id}`, 20);
+    const outcome = OUTCOMES.find((x) => x === o) ?? null;
+    if (o && !outcome) throw new Refused('Pick what happened from the list.');
+    return { assignmentId: id, outcome, rehire: form[`no:${id}`] ? (false as const) : null };
   });
-  const [understaffed, overstaffed, wentWrong] = ['understaffed', 'overstaffed', 'wentWrong'].map((k) => str(k, 1000)) as [string, string, string];
-  if (!understaffed || !overstaffed || !wentWrong) throw new Refused('Answer all three questions about the area. “Never” and “nothing” are fine answers.');
-  return { people, understaffed, overstaffed, wentWrong };
+  return { people, note: str('note', 1000) };
 }
 
-/** One area's review: a row per person (optional) and the three answers (required). Saving again replaces. */
+/**
+ * One area's review. A person gets a row only when someone said something about them: the planner picked
+ * what happened, or they were ticked, or a tick was taken back. Everyone else stays on what check-in says,
+ * so a lead's save freezes nothing. Saving again replaces.
+ */
 export async function saveReview(tx: Tx, area: { id: string; orgId: string; eventId: string }, actor: { userId: string | null; name: string }, input: ReviewInput) {
   const { orgId, eventId } = area;
   const event = await tx.event.findUniqueOrThrow({ where: { id: eventId }, select: { status: true } });
   if (event.status !== 'closed') throw new Refused('The review opens when the event is closed.');
   const ids = input.people.map((p) => p.assignmentId);
-  const onRoster = await tx.assignment.count({ where: { id: { in: ids }, orgId, eventId, shift: { position: { areaId: area.id } }, ...REVIEWABLE } });
-  if (onRoster !== new Set(ids).size) throw new Refused('Someone on the list is no longer on this area’s roster. Reload and try again.');
+  const roster = await tx.assignment.findMany({
+    where: { id: { in: ids }, orgId, eventId, shift: { position: { areaId: area.id } }, ...REVIEWABLE },
+    select: {
+      id: true, checkedInAt: true, checkedOutAt: true, checkOutMethod: true, review: { select: { outcome: true } },
+      shift: { select: { callAt: true, endAt: true, position: { select: { graceMin: true } } } }, event: { select: { graceMin: true } },
+    },
+  });
+  if (roster.length !== ids.length) throw new Refused('Someone on the list is no longer on this area’s roster. Reload and try again.');
   const stamp = { by: actor.name, at: now() };
-  for (const { assignmentId, ...p } of input.people) {
-    await tx.review.upsert({ where: { assignmentId }, create: { orgId, eventId, assignmentId, ...p, ...stamp }, update: { ...p, ...stamp } });
+  for (const a of roster) {
+    const p = input.people.find((x) => x.assignmentId === a.id)!;
+    if (!p.outcome && p.rehire === null && !a.review) continue;
+    const said = { outcome: p.outcome ?? outcomeOf(a), rehire: p.rehire, ...stamp };
+    await tx.review.upsert({ where: { assignmentId: a.id }, create: { orgId, eventId, assignmentId: a.id, ...said }, update: said });
   }
-  const answers = { understaffed: input.understaffed, overstaffed: input.overstaffed, wentWrong: input.wentWrong, waived: false, waiveNote: '', ...stamp };
+  // The one note lives in `wentWrong`. An update leaves the other two columns alone, so a review saved
+  // on the old three-question form keeps those answers when it is saved again.
+  const answers = { wentWrong: input.note, waived: false, waiveNote: '', ...stamp };
   await tx.areaReview.upsert({ where: { areaId: area.id }, create: { orgId, eventId, areaId: area.id, ...answers }, update: answers });
   await audit({ orgId, userId: actor.userId }, 'review.saved', { targetType: 'area', targetId: area.id, data: { by: actor.name, people: ids.length } }, tx);
 }
@@ -141,25 +161,31 @@ export const reviewSheet = (scope: { orgId: string; eventId: string }, aorIds?: 
     include: {
       aor: true,
       review: true,
-      positions: { orderBy: { name: 'asc' }, include: { shifts: { orderBy: { startAt: 'asc' }, include: { assignments: { where: REVIEWABLE, include: { person: true, review: true }, orderBy: { person: { name: 'asc' } } } } } } },
+      positions: { orderBy: { name: 'asc' }, include: { shifts: { orderBy: { startAt: 'asc' }, include: { assignments: { where: { ...REVIEWABLE, ...ended() }, include: { person: true, review: true }, orderBy: { person: { name: 'asc' } } } } } } },
     },
   });
 export type SheetArea = Awaited<ReturnType<typeof reviewSheet>>[number];
 
-/** First close: start the review clock and text each AoR's lead (the deputy where there is no lead) their review link. */
+type Scope = { orgId: string; eventId: string };
+/** Who the first close texts a review link: each AoR's lead (the deputy where there is no lead), once however many they lead. */
+export async function reviewLeads(tx: Tx, scope: Scope) {
+  const aors = await tx.aor.findMany({ where: { ...scope, areas: { some: STAFFED } }, include: { lead: true, deputy: true } });
+  return [...new Map(aors.flatMap((a) => a.lead ?? a.deputy ?? []).map((p) => [p.id, p])).values()];
+}
+/** Who the first close thanks: everyone who checked in. */
+export const workedAt = (tx: Tx, scope: Scope) => tx.person.findMany({ where: { orgId: scope.orgId, assignments: { some: { ...scope, checkedInAt: { not: null } } } } });
+
+/** First close: start the review clock and text each lead their review link. */
 export async function openReviews(tx: Tx, event: { id: string; orgId: string; name: string }) {
   const t = now();
   const scope = { orgId: event.orgId, eventId: event.id };
   await tx.event.update({ where: { id: event.id }, data: { closedAt: t } });
-  const aors = await tx.aor.findMany({ where: { ...scope, areas: { some: STAFFED } }, include: { lead: true, deputy: true } });
-  const told = new Set<string>();
-  for (const p of aors.map((a) => a.lead ?? a.deputy)) {
-    if (!p || told.has(p.id)) continue; // one text, however many AoRs they lead
-    told.add(p.id);
+  const leads = await reviewLeads(tx, scope);
+  for (const p of leads) {
     const url = await ensurePersonLink(tx, { ...scope, personId: p.id }, new Date(t.getTime() + REVIEW_ASK_MS + 86_400_000));
     await notify(tx, event.orgId, p, 'cb_review', { name: firstName(p.name), event: event.name, url: `${url}/review` });
   }
-  return told.size;
+  return leads.length;
 }
 
 export const THANKS = 'Thank you for your work at {event}, {name}. It went well because you were there.';
@@ -172,7 +198,7 @@ export const THANKS_LINK_MS = 30 * 86_400_000; // how long "count me in next tim
  */
 export async function sendThanks(tx: Tx, event: { id: string; orgId: string; name: string; thanks: string }) {
   const scope = { orgId: event.orgId, eventId: event.id };
-  const worked = await tx.person.findMany({ where: { orgId: event.orgId, assignments: { some: { ...scope, checkedInAt: { not: null } } } } });
+  const worked = await workedAt(tx, scope);
   const expires = new Date(now().getTime() + THANKS_LINK_MS);
   for (const p of worked) {
     const url = await ensurePersonLink(tx, { ...scope, personId: p.id }, expires);

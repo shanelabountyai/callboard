@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { advanceClock, now } from '@/core/clock';
 import { db } from '@/core/db';
 import { createCard, saveCard } from '@/app/o/[org]/cards/actions';
-import { createEvent, duplicateEvent, saveAsTemplate } from '@/app/o/[org]/events/actions';
-import { setAreaPlaybook, setEventDefaults, setPositionCard, setStatus } from '@/app/o/[org]/events/[id]/actions';
+import { createEvent, duplicateEvent } from '@/app/o/[org]/events/actions';
+import { saveLocation, setEventDefaults, saveRole, setStatus } from '@/app/o/[org]/events/[id]/actions';
 import { invite } from '@/app/o/[org]/events/[id]/staff/actions';
 import { createPlaybook, savePlaybook } from '@/app/o/[org]/playbooks/actions';
 import { saveStandard } from '@/app/o/[org]/rules/actions';
@@ -13,6 +13,8 @@ import '@/lib/messages';
 import { runReminders } from '@/lib/reminders';
 import { buildReport, coverage, median } from '@/lib/report';
 import { deviations, pickRules, standardOf } from '@/lib/rules';
+import { stageOf, startDue } from '@/lib/stages';
+import { ymd, zonedToUtc } from '@/lib/time';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { resetAuthTables } from '../helpers/auth';
 import { NavSignal } from '../helpers/next';
@@ -94,8 +96,8 @@ describe('playbooks', () => {
 
     const planned = await db.event.create({ data: { orgId: s.orgId, name: 'Autumn Expo', status: 'staffing' } });
     const area = await db.area.create({ data: { orgId: s.orgId, eventId: planned.id, name: 'Registration' } });
-    await went(setAreaPlaybook('acme', { id: s.reg.id, playbookId: v1.id }));
-    await went(setAreaPlaybook('acme', { id: area.id, playbookId: v1.id }));
+    await went(saveLocation('acme', { id: s.reg.id, playbookId: v1.id }));
+    await went(saveLocation('acme', { id: area.id, playbookId: v1.id }));
 
     await went(savePlaybook('acme', { id: v1.id, title: 'Registration', staffing: v1.staffing, failurePoints: v1.failurePoints, callOffsetMin: 60 }));
     const v2 = await db.playbook.findFirstOrThrow({ where: { key: 'registration', version: 2 } });
@@ -103,49 +105,44 @@ describe('playbooks', () => {
     expect((await db.area.findUniqueOrThrow({ where: { id: s.reg.id } })).playbookId).toBe(v1.id); // live: frozen
     expect((await db.area.findUniqueOrThrow({ where: { id: area.id } })).playbookId).toBe(v2.id); // planned: moved up
     expect(await savePlaybook('acme', { id: v1.id, title: 'Registration', equipment: '4 radios' })).toEqual({ error: expect.stringContaining('Version 2 was saved while you were editing') });
-    await went(setAreaPlaybook('acme', { id: area.id, playbookId: '' }));
+    await went(saveLocation('acme', { id: area.id, playbookId: '' }));
     expect((await db.area.findUniqueOrThrow({ where: { id: area.id } })).playbookId).toBeNull();
   });
 });
 
-describe('event templates', () => {
-  it('save keeps the structure and drops the people; an event started from it is a copy on the latest library', async () => {
+describe('starting from an earlier event', () => {
+  it('the copy keeps the structure and the leads, drops the people, and lands on the latest library', async () => {
     const s = await stage('staffing');
     await actAs(s.dana.id, 'acme');
     await went(createCard('acme', { title: 'Greeter', duties: 'Welcome people' }));
     const card1 = await db.positionCard.findFirstOrThrow({ where: { key: 'greeter' } });
-    await went(setPositionCard('acme', { id: s.greeter.id, cardId: card1.id }));
+    await went(saveRole('acme', { id: s.greeter.id, cardId: card1.id }));
     await went(setEventDefaults('acme', { id: s.event.id, graceMin: 5, overbookPct: 50 }));
-
-    expect(await went(saveAsTemplate('acme', { id: s.event.id, name: 'Expo template', attendanceBand: '250 to 1,000' }))).toBe('/o/acme/templates');
-    const tpl = await db.event.findFirstOrThrow({ where: { isTemplate: true }, include: { aors: true, areas: true, positions: true, shifts: true, assignments: true, days: true } });
-    expect(tpl).toMatchObject({ name: 'Expo template', attendanceBand: '250 to 1,000', status: 'draft', graceMin: 5, overbookPct: 50, templateId: null });
-    expect([tpl.aors.length, tpl.areas.length, tpl.positions.length, tpl.shifts.length, tpl.assignments.length]).toEqual([2, 2, 2, 2, 0]);
-    expect(tpl.aors.every((a) => a.leadId === null && a.deputyId === null)).toBe(true); // leads are slots to fill
-    expect((await event(s.event.id)).templateId).toBeNull(); // saving links nothing back
-
-    // A template is never staffed or run.
-    expect(await setStatus('acme', { id: tpl.id, status: 'staffing' })).toEqual({ error: expect.stringContaining('never staffed') });
-    expect(await invite('acme', { shiftId: tpl.shifts[0]!.id, [`p:${s.ana.id}`]: 'on' })).toEqual({ error: expect.stringContaining('never staffed') });
-
-    // The card moves on; the template, still being planned, follows it, and so does the event started from it.
     await went(saveCard('acme', { id: card1.id, title: 'Greeter', duties: 'Welcome people\nPoint to the badge line' }));
     const card2 = await db.positionCard.findFirstOrThrow({ where: { key: 'greeter', version: 2 } });
-    await went(duplicateEvent('acme', { id: tpl.id, name: 'Autumn Expo', startsOn: '2027-10-01' }));
-    const made = await db.event.findFirstOrThrow({ where: { name: 'Autumn Expo' }, include: { days: true, positions: true, shifts: true, assignments: true } });
-    expect(made).toMatchObject({ isTemplate: false, templateId: tpl.id, attendanceBand: '250 to 1,000', graceMin: 5, overbookPct: 50, status: 'draft' });
+    const src = await db.event.findUniqueOrThrow({ where: { id: s.event.id }, include: { shifts: true, days: true } });
+
+    await went(duplicateEvent('acme', { id: s.event.id, name: 'Autumn Expo', startsOn: '2027-10-01' }));
+    const made = await db.event.findFirstOrThrow({ where: { name: 'Autumn Expo' }, include: { days: true, aors: true, positions: true, shifts: true, assignments: true } });
+    expect(made).toMatchObject({ isTemplate: false, templateId: null, graceMin: 5, overbookPct: 50, status: 'draft' });
     expect(made.days.map((d) => d.date.toISOString().slice(0, 10))).toEqual(['2027-10-01']);
+    expect(made.aors.map((a) => a.leadId).sort()).toEqual([s.marcus.id, s.sofia.id].sort());
     expect(made.positions.find((p) => p.name === 'Greeter')!.cardId).toBe(card2.id);
     expect(made.assignments).toEqual([]);
-    const from = tpl.shifts[0]!;
-    const shift = made.shifts.find((x) => x.needed === from.needed)!;
+    const from = src.shifts.find((x) => x.needed === 2)!;
+    const shift = made.shifts.find((x) => x.needed === 2)!;
     expect(shift.endAt.getTime() - shift.callAt.getTime()).toBe(from.endAt.getTime() - from.callAt.getTime()); // the pattern, moved whole
-    expect(shift.startAt.getTime() - from.startAt.getTime()).toBe(made.days[0]!.date.getTime() - tpl.days[0]!.date.getTime());
+    expect(shift.startAt.getTime() - from.startAt.getTime()).toBe(made.days[0]!.date.getTime() - src.days[0]!.date.getTime());
 
-    // Copied, never linked: editing the event leaves the template alone.
+    // Copied, never linked: editing the new event leaves the old one alone.
     await db.position.updateMany({ where: { eventId: made.id }, data: { name: 'Changed' } });
-    expect(await db.position.count({ where: { eventId: tpl.id, name: 'Changed' } })).toBe(0);
-    expect(await duplicateEvent('acme', { id: tpl.id, name: 'Bad date', startsOn: 'next week' })).toEqual({ error: 'Start date must be YYYY-MM-DD.' });
+    expect(await db.position.count({ where: { eventId: s.event.id, name: 'Changed' } })).toBe(0);
+    expect(await duplicateEvent('acme', { id: s.event.id, name: 'Bad date', startsOn: 'next week' })).toEqual({ error: 'Start date must be YYYY-MM-DD.' });
+
+    // Templates were cut (S5). A row saved as one before that is still never staffed or run.
+    await db.event.update({ where: { id: made.id }, data: { isTemplate: true } });
+    expect(await setStatus('acme', { id: made.id, status: 'staffing' })).toEqual({ error: expect.stringContaining('never staffed') });
+    expect(await invite('acme', { shiftId: made.shifts[0]!.id, [`p:${s.ana.id}`]: 'on' })).toEqual({ error: expect.stringContaining('never staffed') });
   });
 });
 
@@ -183,9 +180,9 @@ describe('the report', () => {
     await alert('no_show', s.tom.id, s.aTom.id, 300, 280);
 
     const r = await buildReport({ orgId: s.orgId, eventId: s.event.id });
-    expect([r.shifts, r.noShows]).toEqual([2, 1]); // Ana declined: not counted
+    expect([r.places, r.shifts, r.noShows, r.late, r.help]).toEqual([3, 2, 1, 0, 3]); // Ana declined: not counted
     expect(r.byPool).toEqual([{ group: 'employee', people: 1, noShows: 0 }, { group: 'volunteer', people: 1, noShows: 1 }]);
-    expect(r.byTier).toEqual([{ group: 'Tier 2', people: 2, noShows: 1 }]);
+    expect(r.byTier).toEqual([{ group: 'Not enough history', people: 2, noShows: 1 }]);
     expect(r.helpByCategory).toEqual([['supplies', 2], ['vip', 1]]);
     expect(r.helpByPosition).toEqual([['Greeter', 3]]);
     expect(r.resolve).toEqual([
@@ -195,6 +192,17 @@ describe('the report', () => {
     expect(r.areas.map((a) => a.name)).toEqual(['Exhibit Hall', 'Registration']);
     expect(r.areas[1]!.hours.every((h) => h.planned === 2 && h.actual === 1)).toBe(true); // Jen alone, all shift
     expect(r.reviews).toEqual({ areas: 2, reviewed: 0, waived: 0 });
+  });
+
+  it('a shift still to come is not a no-show', async () => {
+    const s = await stage('staffing');
+    await db.shift.updateMany({ where: { eventId: s.event.id }, data: { endAt: new Date(now().getTime() + HOUR) } });
+    const r = await buildReport({ orgId: s.orgId, eventId: s.event.id });
+    expect([r.places, r.shifts, r.noShows]).toEqual([0, 0, 0]); // before the fix: 2 confirmed, Tom a no-show
+    expect(r.areas.map((a) => a.hours.length)).toEqual([0, 0]); // and no hour under its minimum
+    expect(r.reviews.areas).toBe(2); // the areas still owe a review once it closes
+    advanceClock(2 * HOUR);
+    expect((await buildReport({ orgId: s.orgId, eventId: s.event.id })).noShows).toBe(1);
   });
 });
 
@@ -219,5 +227,35 @@ describe('thank you and come back', () => {
     expect((await db.person.findUniqueOrThrow({ where: { id: s.jen.id } })).wantsBackAt).not.toBeNull();
     expect((await db.person.findUniqueOrThrow({ where: { id: s.tom.id } })).wantsBackAt).toBeNull();
     expect((await tap('not-a-token', { kind: 'back' })).status).toBe(404);
+  });
+});
+
+describe('stages', () => {
+  it('an event open for staffing runs from the start of its first day, in its own timezone, and is frozen from then', async () => {
+    const s = await stage('live');
+    await actAs(s.dana.id, 'acme');
+    const std = pickRules(await standardOf(s.orgId, db));
+    const day = ymd(new Date(Date.now() + 2 * DAY));
+    await went(createEvent('acme', { name: 'Autumn Expo', startsOn: day, endsOn: day }));
+    await went(createEvent('acme', { name: 'Winter Gala', startsOn: day, endsOn: day })); // never opened for staffing
+    const autumn = await db.event.findFirstOrThrow({ where: { name: 'Autumn Expo' }, include: { days: true } });
+    const gala = await db.event.findFirstOrThrow({ where: { name: 'Winter Gala' } });
+    await went(setStatus('acme', { id: autumn.id, status: 'staffing' }));
+    const open = { ...autumn, status: 'staffing' as const };
+    const start = zonedToUtc(day, '00:00', autumn.timezone).getTime() - Date.now();
+
+    advanceClock(start - MIN);
+    expect(stageOf(open)).toBe('Staffing');
+    expect(await startDue()).toBe(0);
+
+    advanceClock(start + MIN);
+    expect(stageOf(open)).toBe('Running'); // the page says so before any cron has run
+    await went(saveStandard('acme', { ...std, graceMin: 20 })); // and so does the freeze
+    expect(await event(autumn.id)).toMatchObject({ status: 'live', graceMin: 15 }); // the rules it started with
+    expect(await event(gala.id)).toMatchObject({ status: 'draft', graceMin: 20 }); // planning never runs by itself
+
+    await went(setStatus('acme', { id: autumn.id, status: 'closed' }));
+    await went(setStatus('acme', { id: autumn.id, status: 'staffing' }));
+    expect((await event(autumn.id)).status).toBe('live'); // reopened on its day: running again
   });
 });

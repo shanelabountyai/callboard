@@ -8,6 +8,7 @@ import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
 import { cardLines, slug } from '@/lib/cards';
 import { must, onUnique } from '@/lib/refuse';
+import { startDue } from '@/lib/stages';
 
 // The position card library (PRD 6). Any planner in the org can edit; every save is a new version with
 // their name on it, and nothing is ever edited in place.
@@ -54,6 +55,7 @@ export const saveCard = orgAction(null, z.object({ id: ref('positionCard'), ...f
   const next = clean(i);
   const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => next[k] !== base[k]);
   if (!changed.length) throw new Refused('Nothing changed, so there is no new version.');
+  await startDue(ctx.orgId); // an event on its first day is running, and frozen, before the cron says so
   await db.$transaction(async (tx) => {
     const card = await tx.positionCard.create({ data: { ...inOrg(ctx), key: base.key, version: base.version + 1, ...next, changedBy: ctx.userId } }).catch(onUnique(TAKEN));
     const moved = await tx.position.updateMany({ where: { ...inOrg(ctx), card: { key: base.key }, event: { status: { notIn: ['live', 'closed'] } } }, data: { cardId: card.id } });

@@ -3,6 +3,7 @@ import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
 import { deviations, standardOf } from '@/lib/rules';
+import { stageOf } from '@/lib/stages';
 import { fmtDay } from '@/lib/time';
 import { createEvent, duplicateEvent } from './actions';
 
@@ -25,7 +26,7 @@ export default async function Events({ params }: { params: Promise<{ org: string
       {events.length === 0 && <p>No events yet. Create one below.</p>}
       {events.map((e) => (
         <section key={e.id}>
-          <h2><Link href={`${base}/${e.id}`}>{e.name}</Link> <small>{e.status}</small></h2>
+          <h2><Link href={`${base}/${e.id}`}>{e.name}</Link> <small>{stageOf(e)}</small></h2>
           <p>
             {e.days.length ? `${fmtDay(e.days[0]!.date, 'UTC')}${e.days.length > 1 ? ` to ${fmtDay(e.days.at(-1)!.date, 'UTC')}` : ''}` : 'No days'}
             {e.venue && ` · ${e.venue}`} · {e._count.shifts} shifts · {e._count.assignments} assignments
@@ -44,7 +45,6 @@ export default async function Events({ params }: { params: Promise<{ org: string
       ))}
 
       <h2>New event</h2>
-      <p>Blank, below, or <Link href={`/o/${ctx.slug}/templates`}>start from a template</Link>.</p>
       <ActionForm action={bind(createEvent)}>
         <label>Name <input name="name" required maxLength={120} /></label>
         <label>Venue <input name="venue" maxLength={200} /></label>

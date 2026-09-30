@@ -1,7 +1,7 @@
 import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
-import { shownTier, tiersFor } from '@/lib/review';
+import { shownTier, TIER_LABEL, tiersFor } from '@/lib/review';
 import { TierPill } from '@/lib/review-fields';
 import { addPerson, deletePerson, importPeople, setTier } from './actions';
 
@@ -17,7 +17,7 @@ export default async function People({ params }: { params: Promise<{ org: string
   return (
     <main>
       <h1>People</h1>
-      <p>Reliability tiers come from the last eight events: check-in and the lead’s review. They show here and on leads’ rosters, never on a person’s own page.</p>
+      <p>Reliability comes from the last eight events: check-in and the lead’s review. It shows on this page only, and it puts the most reliable people first when you invite.</p>
       <p>{people.length} in the directory: {people.filter((p) => p.kind === 'employee').length} employees, {people.filter((p) => p.kind === 'volunteer').length} volunteers.</p>
       <table>
         <thead><tr><th>Name</th><th>Mobile</th><th>Email</th><th>Kind</th><th>Department</th><th>Reliability</th><th></th></tr></thead>
@@ -31,7 +31,7 @@ export default async function People({ params }: { params: Promise<{ org: string
                   <summary>Set by hand</summary>
                   <ActionForm action={bind(setTier)}>
                     <input type="hidden" name="id" value={p.id} />
-                    <label>Tier <select name="tier" defaultValue={p.tierOverride ?? ''} aria-label={`Tier for ${p.name}`}><option value="">From history</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+                    <label>Reliability <select name="tier" defaultValue={p.tierOverride ?? ''} aria-label={`Reliability for ${p.name}`}><option value="">From history</option>{([1, 2, 3] as const).map((n) => <option key={n} value={n}>{TIER_LABEL[n]}</option>)}</select></label>
                     <label>Why <input name="note" maxLength={200} defaultValue={p.tierNote} /></label>
                     <button type="submit">Save</button>
                   </ActionForm>

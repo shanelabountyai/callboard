@@ -5,7 +5,6 @@ import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
 import { aor as stripe } from '@/lib/colors';
 import { shownTier, tiersFor } from '@/lib/review';
-import { TierPill } from '@/lib/review-fields';
 import { now } from '@/core/clock';
 import { inviteCap, OPEN, overlapping } from '@/lib/staffing';
 import { isLive, OPEN_SWAP, swapInclude } from '@/lib/swaps';
@@ -115,7 +114,7 @@ export default async function Staff({ params }: { params: Promise<{ org: string;
                         const b = busy.get(p.id); // free people first; the busy stay listed, with what holds them
                         return (
                           <label key={p.id}>
-                            <input type="checkbox" name={`p:${p.id}`} disabled={!!b} /> {p.name} <TierPill t={p.tier} /> <small>({p.kind}{p.department && `, ${p.department}`}{p.wantsBackAt && `, asked to come back ${fmtDay(p.wantsBackAt, tz)}`})</small>
+                            <input type="checkbox" name={`p:${p.id}`} disabled={!!b} /> {p.name} <small>({p.kind}{p.department && `, ${p.department}`}{p.wantsBackAt && `, asked to come back ${fmtDay(p.wantsBackAt, tz)}`})</small>
                             {b && <small> · busy: {b.position.name} at {b.event.name}, {fmtTime(b.startAt, tz)} to {fmtTime(b.endAt, tz)}</small>}
                           </label>
                         );

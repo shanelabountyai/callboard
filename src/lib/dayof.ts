@@ -89,6 +89,26 @@ async function tell(tx: Tx, alertId: string, aor: Chain, step: number, template:
 }
 
 /**
+ * "Can't reach them" from a lead's phone, and its undo. The no-show goes straight to the planners, by email and
+ * on the board; the person is not texted and keeps the shift, because taking them off is the planner's call.
+ * The note marks that a lead did it (the sweep never writes one on a no-show), so the page can offer the undo.
+ * Undo hands it back to the chain's first step and tells the planners. False when there was nothing to change.
+ */
+export async function cantReach(tx: Tx, al: { id: string; orgId: string; eventId: string }, a: FullAssignment, by: string, undo: boolean): Promise<boolean> {
+  const aor = a.shift.position.area.aor;
+  const t = now();
+  const says = undo ? `${by} has reached them, nothing to do yet` : `${by} cannot reach them`;
+  const { count } = await tx.alert.updateMany({
+    where: { id: al.id, orgId: al.orgId, kind: 'no_show', resolvedAt: null, note: undo ? { not: '' } : '' },
+    data: undo ? { step: firstStep(aor), steppedAt: t, note: '' } : { step: 2, steppedAt: t, note: says },
+  });
+  if (!count) return false;
+  await tell(tx, al.id, aor, 2, 'cb_noshow', { event: a.event.name, list: `${a.person.name} (${a.shift.position.name}): ${says}`, count: '1' }, al.orgId, al.eventId);
+  await audit({ orgId: al.orgId, userId: null }, undo ? 'alert.reach_undo' : 'alert.unreachable', { targetType: 'alert', targetId: al.id, data: { by: 'person', name: by } }, tx);
+  return true;
+}
+
+/**
  * The five-minute sweep: raise a no-show alert for everyone past call time plus grace, escalate open
  * alerts that have sat a step too long, and close assignments nobody checked out an hour after shift end.
  */

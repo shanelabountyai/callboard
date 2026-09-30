@@ -33,7 +33,7 @@ Object.assign(templates, {
   // Day of (PRD 5). `to` is the recipient's first name, or "planner" for the email at the top of the chain.
   cb_noshow: (d) => ({
     subject: `${s(d.event)}: ${s(d.count)} not checked in`,
-    body: `${s(d.to)}: not checked in at ${s(d.event)}: ${s(d.list)}.${d.url ? ` Check in, release or get cover: ${s(d.url)}` : ' See the coverage board.'}`,
+    body: `${s(d.to)}: not checked in at ${s(d.event)}: ${s(d.list)}.${d.url ? ` Check them in, or pass it to the planner: ${s(d.url)}` : ' See the coverage board.'}`,
   }),
   cb_help: (d) => ({
     subject: `${s(d.event)}: ${s(d.name)} needs help (${s(d.category)})`,
@@ -49,8 +49,8 @@ Object.assign(templates, {
   }),
   // After the event (PRD 6).
   cb_review: (d) => ({
-    subject: `${s(d.event)}: your three-minute review`,
-    body: `${s(d.name)}, thank you for leading at ${s(d.event)}. One last thing, about three minutes: who showed, and what to fix next time. ${s(d.url)}`,
+    subject: `${s(d.event)}: your one-minute review`,
+    body: `${s(d.name)}, thank you for leading at ${s(d.event)}. One last thing, about a minute: anyone you would not have back, and anything to fix next time. ${s(d.url)}`,
   }),
   cb_review_due: (d) => ({
     subject: `${s(d.event)}: reviews still open after a week`,

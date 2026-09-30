@@ -5,21 +5,21 @@ import { now } from '@/core/clock';
 import { db } from '@/core/db';
 import { clientIp } from '@/core/http';
 import { CardView } from '@/lib/card-view';
+import { repeatsCard } from '@/lib/cards';
 import { aor as stripe } from '@/lib/colors';
 import { dueAt, EARLY_MS, HELP_CATEGORIES, isOverdue } from '@/lib/dayof';
 import { readPersonLink } from '@/lib/links';
 import { PlaybookView } from '@/lib/playbook-view';
-import { shownTier, tiersFor } from '@/lib/review';
-import { TierPill } from '@/lib/review-fields';
 import { assignmentInclude, firstName } from '@/lib/staffing';
 import { isLive, OPEN_SWAP, SWAP_SAYS, swapInclude, swappable, type SwapSays } from '@/lib/swaps';
-import { fmtDay, fmtTime, fmtWhen } from '@/lib/time';
+import { fmtDay, fmtTime, fmtWhen, ymd } from '@/lib/time';
 import { Taps } from './taps';
 
 // The person's page (PRD 3, PRD 5): no login, reached from the link in their text. What they need and
-// nothing else: where, when, what to wear, who to ask, what the job is, one tap to answer, and on the
-// day one tap to check in, check out or ask for help. A lead also runs their AoR from here: tap
-// check-in for their crew (offline-capable, see taps.tsx), overdue flags and the alerts they own.
+// nothing else: where, when, what to wear, who to ask, one tap to answer, and on the day one tap to
+// check in, check out or ask for help. The answer comes before the job description, which is folded, so
+// Confirm is on the first screen. A lead also runs their team from here: one list for today, the people
+// who are overdue at the top, a tap to check each one in (offline-capable, see taps.tsx). Other days fold.
 // Before the day a person can ask a colleague in their own area to swap shifts; the lead approves here.
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Your shifts', robots: { index: false, follow: false } };
@@ -33,7 +33,8 @@ const DONE: Record<string, string> = {
   help: 'Your lead has been told and will come to you.',
   ack: 'Thanks, noted.',
   resolve: 'Alert closed.',
-  release: 'Released. They have been told.',
+  unreachable: 'The planner has been told. They have not been texted, and the shift is still theirs.',
+  reach_undo: 'Undone. The planner has been told it is back with you.',
   back: 'You are on the list for next time. Thank you.',
 };
 
@@ -59,9 +60,6 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
     }),
     db.broadcastRecipient.findMany({ where: { orgId, personId: person.id, broadcast: { eventId: event.id } }, include: { broadcast: true }, orderBy: { broadcast: { createdAt: 'desc' } }, take: 10 }),
   ]);
-  // Tiers are for leads and planners only (PRD 6): computed for a lead's crew, never rendered on anyone's own card.
-  const crew = leads.flatMap((aor) => aor.areas.flatMap((ar) => ar.positions.flatMap((p) => p.shifts.flatMap((s) => s.assignments.map((x) => x.personId)))));
-  const tiers = crew.length ? await tiersFor(orgId, crew) : new Map();
   // Swaps (PRD 3): mine, the ones asked of me, and the agreed ones waiting on me as a lead.
   const myAorIds = leads.map((x) => x.id);
   const swaps = (await db.swap.findMany({
@@ -81,6 +79,8 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
   });
   const takes = (a: { shift: { startAt: Date; position: { name: string } } }) => `${a.shift.position.name}, ${fmtWhen(a.shift.startAt, tz)}`;
   const act = `/p/${token}/act`;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(t); // YYYY-MM-DD in the event's zone
+  const isLiveShift = (s: { callAt: Date; endAt: Date }) => s.callAt.getTime() - EARLY_MS <= t.getTime() && t.getTime() <= s.endAt.getTime() + 3_600_000;
   const onDay = assignments.some((a) => a.shift.callAt.getTime() - EARLY_MS <= t.getTime() && t.getTime() <= a.shift.endAt.getTime() + 3_600_000);
 
   return (
@@ -132,6 +132,8 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
         const offered = swaps.some((x) => x.toId === a.id);
         const options = mine.includes(a) && !asked && !offered ? colleagues.filter((c) => c.shift.position.area.aorId === area.aorId && c.shiftId !== a.shiftId) : [];
         const lead = area.aor?.lead;
+        const { card, brief } = a.shift.position;
+        const notes = card && repeatsCard(card, brief) ? '' : brief;
         const window = a.shift.callAt.getTime() - EARLY_MS <= t.getTime() && t.getTime() <= a.shift.endAt.getTime() + 3_600_000;
         return (
           <article key={a.id} className="stripe" style={stripe(area.aor?.color)}>
@@ -140,8 +142,6 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
             {area.location && <p>Where: {area.location}</p>}
             {a.shift.position.uniform && <p>Wear: {a.shift.position.uniform}</p>}
             <p>Your lead: {lead ? <>{lead.name}, <a href={`tel:${lead.mobile}`}>{lead.mobile}</a></> : 'the event planner'}{area.aor?.radioChannel && ` · radio ${area.aor.radioChannel}`}</p>
-            {a.shift.position.card && <CardView card={a.shift.position.card} />}
-            {a.shift.position.brief && <p className="pre">{a.shift.position.brief}</p>}
             <p>
               Status: <span className="pill" data-status={a.checkedOutAt ? 'done' : a.checkedInAt ? 'here' : a.status}>{a.status}</span>
               {a.checkedInAt && <> · checked in {fmtTime(a.checkedInAt, tz)}</>}
@@ -158,8 +158,15 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
               <form method="post" action={`/p/${token}/respond`} className="pair">
                 <input type="hidden" name="assignment" value={a.id} />
                 <button type="submit" name="answer" value="confirm" disabled={a.status === 'confirmed'} className="primary">Confirm</button>
-                <button type="submit" name="answer" value="decline" disabled={a.status === 'declined'}>Decline</button>
+                <button type="submit" name="answer" value="decline" disabled={a.status === 'declined'}>Can’t make it</button>
               </form>
+            )}
+            {(card || notes) && (
+              <details>
+                <summary>What the job is</summary>
+                {card && <CardView card={card} />}
+                {notes && <p className="pre">{notes}</p>}
+              </details>
             )}
             {asked && (
               <form method="post" action={act}>
@@ -203,111 +210,127 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
         </details>
       )}
 
-      {leads.map((aor) => (
-        <section key={aor.id} className="stripe" style={stripe(aor.color)}>
-          <h2>You {aor.leadId === person.id ? 'lead' : 'are deputy for'} {aor.name}</h2>
-          <p>
-            {aor.leadId === person.id ? `Deputy: ${aor.deputy?.name ?? 'none'}` : `Lead: ${aor.lead?.name ?? 'none'}`}
-            {aor.radioChannel && ` · radio ${aor.radioChannel}`}
-          </p>
-          {[['Breaks', event.breaks], ['Minors', event.minors], ['Moving people', event.moves]].filter(([, v]) => v).map(([k, v]) => <p key={k} className="pre"><strong>{k}:</strong> {v}</p>)}
-          {event.status === 'closed' && <p><a href={`/p/${token}/review`}><strong>Review your crew</strong></a> (about three minutes): who showed, and what to fix next time.</p>}
-          {aor.alerts.length > 0 && (
-            <div>
-              <h3>Needs you ({aor.alerts.length})</h3>
-              {aor.alerts.map((al) => (
-                <article key={al.id} className="alert" data-severity={al.severity >= 3 ? 'high' : 'normal'}>
-                  <p>
-                    <strong>{al.kind === 'no_show' ? 'Not checked in' : `Help: ${al.category}`}</strong> · {al.person.name}
-                    {al.assignment && ` · ${al.assignment.shift.position.name}`} · since {fmtTime(al.openedAt, tz)}
-                    {al.step === 1 && ' · escalated to deputy'}{al.step === 2 && ' · with the planner'}
-                    {al.note && <><br />“{al.note}”</>}
-                  </p>
-                  <div className="pair">
-                    {al.assignment && al.kind === 'no_show' && (
-                      <form method="post" action={act} data-tap>
-                        <input type="hidden" name="kind" value="checkin" /><input type="hidden" name="assignment" value={al.assignment.id} />
-                        <button type="submit" className="primary">They’re here</button>
+      {leads.map((aor) => {
+        // One list (S4): the day shown is today, or the next day with shifts, or the last one. Everyone on it appears once.
+        const shifts = aor.areas.flatMap((area) => area.positions.flatMap((pos) => pos.shifts.map((s) => ({ s, pos, area }))));
+        const days = [...new Set(shifts.map((x) => ymd(x.s.day.date)))].sort();
+        const shown = days.find((d) => d >= today) ?? days.at(-1);
+        const noShow = (id: string) => aor.alerts.find((al) => al.kind === 'no_show' && al.assignment?.id === id);
+        const crewOf = ({ s, pos }: (typeof shifts)[number]) => s.assignments.filter((x) => x.status !== 'released' && x.status !== 'declined').map((x) => {
+          const full = { ...x, shift: { ...s, position: pos }, event };
+          return { x, s, pos, full, late: ymd(s.day.date) === shown && (isOverdue(full, t) || (!x.checkedInAt && !!noShow(x.id))) };
+        });
+        const late = shifts.flatMap(crewOf).filter((r) => r.late);
+        const onList = new Set(late.map((r) => r.x.id));
+        const cards = aor.alerts.filter((al) => !(al.assignment && onList.has(al.assignment.id)));
+        const row = ({ x, s, pos, full, late }: ReturnType<typeof crewOf>[number]) => {
+          const al = late ? noShow(x.id) : undefined;
+          return (
+            <li key={x.id} className="row" data-late={late ? '' : undefined}>
+              <span className="grow">
+                {x.person.name} · <a href={`tel:${x.person.mobile}`}>{x.person.mobile}</a>
+                {late ? <> · {pos.name}, arrive by {fmtTime(s.callAt, tz)}</> : <> · <span className="pill" data-status={x.status}>{x.status}</span></>}
+                {x.checkedInAt && <> · <strong>here {fmtTime(x.checkedInAt, tz)}</strong></>}
+                {x.checkedOutAt && <> · out {fmtTime(x.checkedOutAt, tz)}{x.checkOutMethod === 'auto' && ' (auto)'}</>}
+                {late && <> · <span className="pill" data-status="overdue">overdue since {fmtTime(dueAt(full), tz)}</span></>}
+                {al?.note && <> · the planner has been told</>}
+              </span>
+              {isLiveShift(s) && !x.checkedOutAt && (
+                <form method="post" action={act} data-tap>
+                  <input type="hidden" name="assignment" value={x.id} />
+                  {!x.checkedInAt
+                    ? <><input type="hidden" name="kind" value="checkin" /><button type="submit" className="primary" aria-label={`Check in ${x.person.name}`}>Here</button></>
+                    : <><input type="hidden" name="kind" value="checkout" /><button type="submit" aria-label={`Check out ${x.person.name}`}>Done</button></>}
+                </form>
+              )}
+              {al && (
+                <form method="post" action={act}>
+                  <input type="hidden" name="alert" value={al.id} />
+                  {al.note
+                    ? <button type="submit" name="kind" value="reach_undo" aria-label={`Undo: the planner was told you cannot reach ${x.person.name}`}>Undo</button>
+                    : <button type="submit" name="kind" value="unreachable" aria-label={`Can’t reach ${x.person.name}`}>Can’t reach them</button>}
+                </form>
+              )}
+            </li>
+          );
+        };
+        const block = (sh: (typeof shifts)[number], withDay: boolean) => {
+          const { s, pos } = sh;
+          const crew = crewOf(sh);
+          return (
+            <details key={s.id} open={!withDay}>
+              <summary>
+                {pos.name}: {withDay && `${fmtDay(s.day.date, 'UTC')}, `}arrive by {fmtTime(s.callAt, tz)} · {crew.filter((r) => r.x.status === 'confirmed').length} confirmed, {s.needed} needed
+                {isLiveShift(s) && ` · ${crew.filter((r) => r.x.checkedInAt && !r.x.checkedOutAt).length} here`}
+              </summary>
+              <ul className="plain">
+                {crew.filter((r) => !r.late).map(row)}
+                {crew.length === 0 && <li>Nobody invited yet.</li>}
+              </ul>
+            </details>
+          );
+        };
+        return (
+          <section key={aor.id} className="stripe" style={stripe(aor.color)}>
+            <h2>You {aor.leadId === person.id ? 'lead' : 'are deputy for'} {aor.name}</h2>
+            {event.status === 'closed' && <p><a href={`/p/${token}/review`}><strong>Review your crew</strong></a> (about a minute): anyone you would not have back, and anything to fix next time.</p>}
+            {cards.map((al) => (
+              <article key={al.id} className="alert pair" data-severity={al.severity >= 3 ? 'high' : 'normal'}>
+                <p className="grow">
+                  <strong>{al.kind === 'no_show' ? 'Not checked in' : `Help: ${al.category}`}</strong> · {al.person.name}
+                  {al.assignment && ` · ${al.assignment.shift.position.name}`} · since {fmtTime(al.openedAt, tz)}
+                  {al.step === 1 && ' · passed to the deputy'}{al.step === 2 && ' · with the planner'}
+                  {al.note && <><br />“{al.note}”</>}
+                </p>
+                <form method="post" action={act}>
+                  <input type="hidden" name="kind" value="resolve" /><input type="hidden" name="alert" value={al.id} />
+                  <button type="submit">Done</button>
+                </form>
+              </article>
+            ))}
+            {swaps.some((x) => x.status === 'accepted' && x.from.shift.position.area.aorId === aor.id) && (
+              <div>
+                <h3>Swaps to approve</h3>
+                {swaps.filter((x) => x.status === 'accepted' && x.from.shift.position.area.aorId === aor.id).map((x) => (
+                  <article key={x.id} className="alert">
+                    <p><strong>{x.from.person.name} and {x.to.person.name} want to swap.</strong> {firstName(x.from.person.name)} would take {takes(x.to)}; {firstName(x.to.person.name)} would take {takes(x.from)}.</p>
+                    {x.from.personId === person.id || x.to.personId === person.id ? <p>You are part of this swap, so {aor.leadId === person.id ? 'your deputy' : 'your lead'} or the planner decides.</p> : (
+                      <form method="post" action={act} className="pair">
+                        <input type="hidden" name="swap" value={x.id} />
+                        <button type="submit" name="kind" value="swap_approve" className="primary">Approve</button>
+                        <button type="submit" name="kind" value="swap_refuse">Refuse</button>
                       </form>
                     )}
-                    {al.assignment && al.kind === 'no_show' && (
-                      <form method="post" action={act}>
-                        <input type="hidden" name="kind" value="release" /><input type="hidden" name="alert" value={al.id} />
-                        <button type="submit">Release them</button>
-                      </form>
-                    )}
-                    <form method="post" action={act}>
-                      <input type="hidden" name="kind" value="resolve" /><input type="hidden" name="alert" value={al.id} />
-                      <button type="submit">Handled</button>
-                    </form>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-          {swaps.some((x) => x.status === 'accepted' && x.from.shift.position.area.aorId === aor.id) && (
-            <div>
-              <h3>Swaps to approve</h3>
-              {swaps.filter((x) => x.status === 'accepted' && x.from.shift.position.area.aorId === aor.id).map((x) => (
-                <article key={x.id} className="alert">
-                  <p><strong>{x.from.person.name} and {x.to.person.name} want to swap.</strong> {firstName(x.from.person.name)} would take {takes(x.to)}; {firstName(x.to.person.name)} would take {takes(x.from)}.</p>
-                  {x.from.personId === person.id || x.to.personId === person.id ? <p>You are part of this swap, so {aor.leadId === person.id ? 'your deputy' : 'your lead'} or the planner decides.</p> : (
-                    <form method="post" action={act} className="pair">
-                      <input type="hidden" name="swap" value={x.id} />
-                      <button type="submit" name="kind" value="swap_approve" className="primary">Approve</button>
-                      <button type="submit" name="kind" value="swap_refuse">Refuse</button>
-                    </form>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
-          {aor.areas.map((area) => (
-            <div key={area.id}>
-              <h3>{area.name}{area.location && ` · ${area.location}`}</h3>
-              {area.playbook && <details><summary>Playbook: equipment, checklists, what has gone wrong before</summary><PlaybookView playbook={area.playbook} /></details>}
-              {area.positions.flatMap((pos) => pos.shifts.map((s) => {
-                const open = s.assignments.filter((x) => x.status !== 'released' && x.status !== 'declined');
-                const here = open.filter((x) => x.checkedInAt && !x.checkedOutAt).length;
-                const live = s.callAt.getTime() - EARLY_MS <= t.getTime() && t.getTime() <= s.endAt.getTime() + 3_600_000;
-                return (
-                  <details key={s.id} open={live || open.length > 0}>
-                    <summary>
-                      {pos.name}: {fmtDay(s.day.date, 'UTC')}, call {fmtTime(s.callAt, tz)} · {open.filter((x) => x.status === 'confirmed').length} confirmed of {s.needed}
-                      {live && ` · ${here} here`}
-                    </summary>
-                    <ul className="plain">
-                      {open.map((x) => {
-                        const full = { ...x, shift: { ...s, position: pos }, event };
-                        const overdue = isOverdue(full, t);
-                        return (
-                          <li key={x.id} className="row">
-                            <span className="grow">
-                              {x.person.name} <TierPill t={shownTier(x.person, tiers)} /> · <a href={`tel:${x.person.mobile}`}>{x.person.mobile}</a> · <span className="pill" data-status={x.status}>{x.status}</span>
-                              {x.checkedInAt && <> · <strong>here {fmtTime(x.checkedInAt, tz)}</strong></>}
-                              {x.checkedOutAt && <> · out {fmtTime(x.checkedOutAt, tz)}{x.checkOutMethod === 'auto' && ' (auto)'}</>}
-                              {overdue && <> · <span className="pill" data-status="overdue">overdue since {fmtTime(dueAt(full), tz)}</span></>}
-                            </span>
-                            {live && !x.checkedOutAt && (
-                              <form method="post" action={act} data-tap>
-                                <input type="hidden" name="assignment" value={x.id} />
-                                {!x.checkedInAt
-                                  ? <><input type="hidden" name="kind" value="checkin" /><button type="submit" className="primary" aria-label={`Check in ${x.person.name}`}>Here</button></>
-                                  : <><input type="hidden" name="kind" value="checkout" /><button type="submit" aria-label={`Check out ${x.person.name}`}>Done</button></>}
-                              </form>
-                            )}
-                          </li>
-                        );
-                      })}
-                      {open.length === 0 && <li>Nobody invited yet.</li>}
-                    </ul>
-                  </details>
-                );
-              }))}
-            </div>
-          ))}
-        </section>
-      ))}
+                  </article>
+                ))}
+              </div>
+            )}
+            {shown && <h3>{shown === today ? 'Today' : fmtDay(new Date(shown), 'UTC')}{late.length > 0 && `: ${late.length} not here`}</h3>}
+            {late.length > 0 && <ul className="plain">{late.map(row)}</ul>}
+            {aor.areas.map((area) => shifts.some((x) => x.area.id === area.id && ymd(x.s.day.date) === shown) && (
+              <div key={area.id}>
+                <h3>{area.name}{area.location && ` · ${area.location}`}</h3>
+                {shifts.filter((x) => x.area.id === area.id && ymd(x.s.day.date) === shown).map((x) => block(x, false))}
+              </div>
+            ))}
+            {days.length > 1 && (
+              <details>
+                <summary>Other days</summary>
+                {shifts.filter((x) => ymd(x.s.day.date) !== shown).map((x) => block(x, true))}
+              </details>
+            )}
+            <details>
+              <summary>Lead notes and house rules</summary>
+              <p>
+                {aor.leadId === person.id ? `Deputy: ${aor.deputy?.name ?? 'none'}` : `Lead: ${aor.lead?.name ?? 'none'}`}
+                {aor.radioChannel && ` · radio ${aor.radioChannel}`}
+              </p>
+              {[['Breaks', event.breaks], ['Minors', event.minors], ['Moving people', event.moves]].filter(([, v]) => v).map(([k, v]) => <p key={k} className="pre"><strong>{k}:</strong> {v}</p>)}
+              {aor.areas.filter((area) => area.playbook).map((area) => <div key={area.id}><h3>{area.name}: equipment, checklists, what has gone wrong before</h3><PlaybookView playbook={area.playbook!} /></div>)}
+            </details>
+          </section>
+        );
+      })}
     </main>
   );
 }

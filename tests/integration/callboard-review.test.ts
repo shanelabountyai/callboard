@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { advanceClock } from '@/core/clock';
 import { db } from '@/core/db';
 import { createCard, saveCard } from '@/app/o/[org]/cards/actions';
-import { setPositionCard, setStatus } from '@/app/o/[org]/events/[id]/actions';
+import { saveRole, setStatus } from '@/app/o/[org]/events/[id]/actions';
 import { saveAreaReview, waiveAreaReview } from '@/app/o/[org]/events/[id]/review/actions';
 import { POST as leadSave } from '@/app/p/[token]/review/save/route';
 import '@/lib/messages';
@@ -66,7 +66,6 @@ describe('reliability tier', () => {
   });
 });
 
-const answers = { understaffed: '8 to 9am', overstaffed: 'never', wentWrong: 'printer 2 jammed' };
 const post = (token: string, fields: Record<string, string>) =>
   leadSave(new Request(`http://localhost/p/${token}/review/save`, { method: 'POST', headers: { origin: 'http://localhost', host: 'localhost' }, body: new URLSearchParams(fields) }), { params: Promise.resolve({ token }) });
 
@@ -84,8 +83,8 @@ describe('position cards', () => {
     const planned = await db.event.create({ data: { orgId: s.orgId, name: 'Autumn Expo', status: 'staffing' } });
     const area = await db.area.create({ data: { orgId: s.orgId, eventId: planned.id, name: 'Registration' } });
     const later = await db.position.create({ data: { orgId: s.orgId, eventId: planned.id, areaId: area.id, name: 'Greeter' } });
-    await went(setPositionCard('acme', { id: s.greeter.id, cardId: v1.id }));
-    await went(setPositionCard('acme', { id: later.id, cardId: v1.id }));
+    await went(saveRole('acme', { id: s.greeter.id, cardId: v1.id }));
+    await went(saveRole('acme', { id: later.id, cardId: v1.id }));
 
     await went(saveCard('acme', { id: v1.id, title: 'Registration Greeter', purpose: 'The first face', duties: 'Welcome people', situations: 'A VIP is not on the list: radio your lead' }));
     const v2 = await db.positionCard.findFirstOrThrow({ where: { key: 'registration-greeter', version: 2 } });
@@ -98,7 +97,7 @@ describe('position cards', () => {
     expect(await db.positionCard.count({ where: { key: 'registration-greeter' } })).toBe(2);
 
     // Linking always takes the latest, whichever version was picked.
-    await went(setPositionCard('acme', { id: s.greeter.id, cardId: v1.id }));
+    await went(saveRole('acme', { id: s.greeter.id, cardId: v1.id }));
     expect((await db.position.findUniqueOrThrow({ where: { id: s.greeter.id } })).cardId).toBe(v2.id);
   });
 });
@@ -112,7 +111,7 @@ describe('the review', () => {
     const texts = await db.capturedMessage.findMany({ where: { body: { contains: '/review' } }, orderBy: { to: 'asc' } });
     expect(texts.map((m) => m.to)).toEqual([s.marcus.mobile, s.sofia.mobile]);
     expect(texts[0]!.body).toMatch(/\/p\/[\w-]+\/review/);
-    await went(setStatus('acme', { id: s.event.id, status: 'live' }));
+    await went(setStatus('acme', { id: s.event.id, status: 'staffing' })); // reopened
     await went(setStatus('acme', { id: s.event.id, status: 'closed' }));
     await drainOutbox();
     expect(await db.capturedMessage.count()).toBe(3); // a second close texts nobody again: two review links and Jen's thank-you
@@ -123,40 +122,49 @@ describe('the review', () => {
     expect(tiers.get(s.jen.id)!.why).toBe('last 1 event: 1 clean, 0 late or left early, 0 no-show');
     expect(tiers.has(s.ana.id)).toBe(false);
 
+    // Nothing ticked and no note is a whole review: the area is done and nobody's record is frozen.
     const marcus = await s.token(s.marcus.id);
-    const form = { areaId: s.reg.id, [`o:${s.aTom.id}`]: 'no_show', [`r:${s.aTom.id}`]: 'no', [`n:${s.aTom.id}`]: 'No call, no text', [`o:${s.aJen.id}`]: 'late', [`r:${s.aJen.id}`]: 'yes' };
-    let res = await post(marcus, form); // the three answers are missing
-    expect(res.headers.get('location')).toContain('/review?error=1');
-    expect(await db.review.count()).toBe(0);
-    res = await post(marcus, { ...form, ...answers });
+    const listed = { areaId: s.reg.id, [`p:${s.aTom.id}`]: '1', [`p:${s.aJen.id}`]: '1' };
+    let res = await post(marcus, listed);
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toContain('/review?done=1');
-    expect(await db.review.findUniqueOrThrow({ where: { assignmentId: s.aTom.id } })).toMatchObject({ outcome: 'no_show', rehire: false, note: 'No call, no text', by: 'Marcus Bell' });
-    expect(await db.areaReview.findUniqueOrThrow({ where: { areaId: s.reg.id } })).toMatchObject({ ...answers, waived: false, by: 'Marcus Bell' });
+    expect(await db.review.count()).toBe(0);
+    expect(await db.areaReview.findUniqueOrThrow({ where: { areaId: s.reg.id } })).toMatchObject({ wentWrong: '', waived: false, by: 'Marcus Bell' });
 
-    // The lead's word overrules the clock (Jen: late), and a no-show plus "would not rehire" is two strikes.
+    // A tick is the only row written, and what happened on it is what check-in said.
+    res = await post(marcus, { ...listed, [`no:${s.aTom.id}`]: 'on', note: 'Tom: no call, no text' });
+    expect(res.headers.get('location')).toContain('/review?done=1');
+    expect(await db.review.findMany()).toMatchObject([{ assignmentId: s.aTom.id, outcome: 'no_show', rehire: false, by: 'Marcus Bell' }]);
+    expect(await db.areaReview.findUniqueOrThrow({ where: { areaId: s.reg.id } })).toMatchObject({ wentWrong: 'Tom: no call, no text' });
+
+    // A no-show plus "would not have back" is two strikes; Jen, never ticked, stays on her check-in.
     tiers = await tiersFor(s.orgId);
     expect(tiers.get(s.tom.id)!.tier).toBe(3);
-    expect(tiers.get(s.jen.id)!.why).toBe('last 1 event: 0 clean, 1 late or left early, 0 no-show');
+    expect(tiers.get(s.jen.id)!.why).toBe('last 1 event: 1 clean, 0 late or left early, 0 no-show');
+
+    // The tick taken back.
+    await post(marcus, listed);
+    expect(await db.review.findUniqueOrThrow({ where: { assignmentId: s.aTom.id } })).toMatchObject({ outcome: 'no_show', rehire: null });
+    expect((await tiersFor(s.orgId)).get(s.tom.id)!.tier).toBe(2);
 
     // Not yours: another lead's area, someone who leads nothing, a person off this area's roster, a foreign origin.
-    expect((await post(await s.token(s.sofia.id), { areaId: s.reg.id, ...answers })).status).toBe(404);
-    expect((await post(await s.token(s.tom.id), { areaId: s.reg.id, ...answers })).status).toBe(404);
-    expect((await post(marcus, { areaId: s.reg.id, [`o:${s.aAna.id}`]: 'no_show', ...answers })).headers.get('location')).toContain('error=1'); // Ana declined: not reviewable
-    expect(await db.review.count()).toBe(2);
-    const foreign = await leadSave(new Request(`http://localhost/p/${marcus}/review/save`, { method: 'POST', headers: { origin: 'https://evil.example', host: 'localhost' }, body: new URLSearchParams({ areaId: s.reg.id, ...answers }) }), { params: Promise.resolve({ token: marcus }) });
+    expect((await post(await s.token(s.sofia.id), { areaId: s.reg.id })).status).toBe(404);
+    expect((await post(await s.token(s.tom.id), { areaId: s.reg.id })).status).toBe(404);
+    expect((await post(marcus, { areaId: s.reg.id, [`p:${s.aAna.id}`]: '1', [`no:${s.aAna.id}`]: 'on' })).headers.get('location')).toContain('error=1'); // Ana declined: not reviewable
+    expect(await db.review.count()).toBe(1);
+    const foreign = await leadSave(new Request(`http://localhost/p/${marcus}/review/save`, { method: 'POST', headers: { origin: 'https://evil.example', host: 'localhost' }, body: new URLSearchParams({ areaId: s.reg.id }) }), { params: Promise.resolve({ token: marcus }) });
     expect(foreign.status).toBe(403);
   });
 
   it('the planner can finish or waive an area, and only once the event is closed', async () => {
     const s = await stage();
     await actAs(s.dana.id, 'acme');
-    expect(await saveAreaReview('acme', { areaId: s.reg.id, ...answers })).toEqual({ error: 'The review opens when the event is closed.' });
+    expect(await saveAreaReview('acme', { areaId: s.reg.id })).toEqual({ error: 'The review opens when the event is closed.' });
     expect(await waiveAreaReview('acme', { areaId: s.hall.id, note: 'Too early' })).toEqual({ error: 'The review opens when the event is closed.' });
     await went(setStatus('acme', { id: s.event.id, status: 'closed' }));
 
-    expect(await saveAreaReview('acme', { areaId: s.reg.id, understaffed: 'never', overstaffed: '', wentWrong: 'nothing' })).toEqual({ error: expect.stringContaining('Answer all three') });
-    await went(saveAreaReview('acme', { areaId: s.reg.id, [`o:${s.aTom.id}`]: 'showed', [`r:${s.aTom.id}`]: '', ...answers })); // Dana saw him there; the tap was missed
+    expect(await saveAreaReview('acme', { areaId: s.reg.id, [`p:${s.aTom.id}`]: '1', [`o:${s.aTom.id}`]: 'vanished' })).toEqual({ error: 'Pick what happened from the list.' });
+    await went(saveAreaReview('acme', { areaId: s.reg.id, [`p:${s.aTom.id}`]: '1', [`o:${s.aTom.id}`]: 'showed' })); // Dana saw him there; the tap was missed
     expect(await db.review.findUniqueOrThrow({ where: { assignmentId: s.aTom.id } })).toMatchObject({ outcome: 'showed', rehire: null, by: 'dana@example.test' });
     expect((await tiersFor(s.orgId)).get(s.tom.id)!.why).toContain('1 clean');
 

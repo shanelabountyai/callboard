@@ -33,7 +33,7 @@ export default async function Playbooks({ params }: { params: Promise<{ org: str
 
   return (
     <main>
-      <h1>Area playbooks</h1>
+      <h1>Lead notes</h1>
       <p>{keys.length} in the library. A playbook says how an area is run: who it needs by the hour, breaks, floats, equipment, the setup and close checklists, and what has gone wrong before. Link one to an area on the event&rsquo;s page and its lead sees it on their roster.</p>
       {keys.map((versions) => {
         const pb = versions[0]!;

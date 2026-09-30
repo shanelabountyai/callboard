@@ -4,20 +4,20 @@ import { audit } from '@/core/audit';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
 import { clientIp, isSameOrigin } from '@/core/http';
-import { checkIn, checkOut, HELP_CATEGORIES, raiseHelp, type Method } from '@/lib/dayof';
+import { cantReach, checkIn, checkOut, HELP_CATEGORIES, raiseHelp, type Method } from '@/lib/dayof';
 import { readPersonLink } from '@/lib/links';
-import { ensurePersonLink } from '@/lib/links';
-import { notify } from '@/lib/messages';
-import { assignmentInclude, describeAssignment, linkExpiry } from '@/lib/staffing';
+import { assignmentInclude, describeAssignment } from '@/lib/staffing';
 import { answerSwap, askSwap, decideSwap, SWAP_SAYS, swapDone, withdrawSwap } from '@/lib/swaps';
 import { drainOutbox } from '@/modules/notifications/outbox';
 
 // Every day-of action from a person's or lead's page (PRD 5): check in or out (own shift, or anyone in
-// an AoR you lead), ask for help, acknowledge a message, resolve or release a no-show. And before the
-// day, a swap (PRD 3): ask, answer, withdraw, and a lead's approval. A POST, same
-// origin, from the link's own page; JSON from taps.tsx or a plain form without JavaScript.
+// an AoR you lead), ask for help, acknowledge a message, close an alert, or pass a no-show to the planner
+// ("Can't reach them") and take that back. A lead cannot release anyone: that texts the person, and it is
+// the planner's, from the Staff page. And before the day, a swap (PRD 3): ask, answer, withdraw, and a
+// lead's approval. A POST, same origin, from the link's own page; JSON from taps.tsx or a plain form
+// without JavaScript.
 const Body = z.object({
-  kind: z.enum(['checkin', 'checkout', 'help', 'ack', 'resolve', 'release', 'back', 'swap_ask', 'swap_yes', 'swap_no', 'swap_withdraw', 'swap_approve', 'swap_refuse']),
+  kind: z.enum(['checkin', 'checkout', 'help', 'ack', 'resolve', 'unreachable', 'reach_undo', 'back', 'swap_ask', 'swap_yes', 'swap_no', 'swap_withdraw', 'swap_approve', 'swap_refuse']),
   assignment: z.uuid().optional(),
   other: z.uuid().optional(), // swap_ask: the colleague's assignment
   swap: z.uuid().optional(),
@@ -96,22 +96,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return count ? reply(200, undefined, 'ack') : reply(404, 'That message is not yours.');
   }
 
-  // resolve / release: a lead closing a no-show in their own AoR
+  // A lead and an alert in their own AoR: close it, pass a no-show to the planner, or take that back.
   if (!i.alert) return reply(400, 'Which alert?');
   const alert = await db.alert.findFirst({ where: { id: i.alert, orgId, eventId: event.id, resolvedAt: null }, include: { assignment: { include: assignmentInclude } } });
   if (!alert || !leads(alert.aorId)) return reply(404, 'That alert is not yours to close.');
-  await db.$transaction(async (tx) => {
-    let resolution = `resolved by ${person.name}${i.note ? `: ${i.note}` : ''}`;
-    if (i.kind === 'release' && alert.assignment && alert.assignment.status !== 'released') {
-      const a = alert.assignment;
-      await tx.assignment.update({ where: { id: a.id }, data: { status: 'released', respondedAt: t } });
-      const url = await ensurePersonLink(tx, { orgId, eventId: event.id, personId: a.personId }, linkExpiry(a.shift.endAt));
-      await notify(tx, orgId, a.person, 'cb_released', describeAssignment(a, url));
-      resolution = `released by ${person.name}`;
-    }
-    await tx.alert.update({ where: { id: alert.id }, data: { resolvedAt: t, resolution } });
-    await audit({ orgId, userId: null }, `alert.${i.kind}`, { targetType: 'alert', targetId: alert.id, data: { by: 'person', personId: person.id } }, tx);
-  });
-  if (i.kind === 'release') await drainOutbox(5);
+  if (i.kind === 'resolve') {
+    await db.$transaction(async (tx) => {
+      await tx.alert.update({ where: { id: alert.id }, data: { resolvedAt: t, resolution: `resolved by ${person.name}${i.note ? `: ${i.note}` : ''}` } });
+      await audit({ orgId, userId: null }, 'alert.resolve', { targetType: 'alert', targetId: alert.id, data: { by: 'person', personId: person.id } }, tx);
+    });
+    return reply(200, undefined, 'resolve');
+  }
+  const a = alert.assignment;
+  if (!a) return reply(409, 'That shift is gone. Tap Done to close the alert.');
+  if (await db.$transaction((tx) => cantReach(tx, alert, a, person.name, i.kind === 'reach_undo'))) await drainOutbox(5); // a second tap changes nothing and sends nothing
   return reply(200, undefined, i.kind);
 }

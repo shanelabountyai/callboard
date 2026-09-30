@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { repeatsCard } from '@/lib/cards';
 import { parseCsv, pickColumn, toRecords } from '@/lib/csv';
 import { toE164 } from '@/lib/phone';
 import { fmtTime, isHm, isYmd, zonedToUtc } from '@/lib/time';
@@ -12,6 +13,15 @@ describe('phone', () => {
     expect(toE164('+44 20 7946 0958')).toBe('+442079460958');
     expect(toE164('12345')).toBeNull();
     expect(toE164('')).toBeNull();
+  });
+});
+
+describe('job description', () => {
+  it('drops notes that only repeat it, and keeps notes that add anything', () => {
+    const card = { purpose: 'The first face an attendee sees.', duties: 'Welcome every attendee\nKeep the doorway clear', situations: '', never: 'Leave the door.', demands: '' };
+    expect(repeatsCard(card, 'Welcome every attendee. keep the doorway clear!')).toBe(true);
+    expect(repeatsCard(card, '')).toBe(true);
+    expect(repeatsCard(card, 'Welcome every attendee. VIP list is at the ops desk.')).toBe(false);
   });
 });
 
