@@ -87,6 +87,9 @@ model Event {
   templateId    String?        @db.Uuid // the template this event was started from; a copy, never a link
   template      Event?         @relation("StartedFrom", fields: [templateId], references: [id], onDelete: SetNull)
   startedFrom   Event[]        @relation("StartedFrom")
+  // The live run of show (PRD 1): a Smartsheet, OneDrive or SharePoint link, pulled by Sync on the run of show page.
+  rosUrl        String         @default("")
+  rosSyncedAt   DateTime?      @db.Timestamptz(6)
   createdAt     DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
   days          EventDay[]
