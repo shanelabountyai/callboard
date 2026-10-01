@@ -11,8 +11,9 @@
 >    work without it, Smartsheet says "not connected"); merge. The first real sync is the test of the untested services.
 >    Whichever of the two merges second will conflict on this file only. If PR #3 merges, take the "not deployed" line out
 >    of the brief's honesty block and out of `docs/DEMO.md`'s concessions.
-> 3. **Build log**: the Callboard row does not exist in the build log artifact yet. The `BUILD LOG UPDATE` block in the
->    closing session's last message has the values; add the row.
+> 3. ~~Build log~~: the Callboard row is in the build log (https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj, version
+>    20, 2026-10-01): rank 11b, shipped, repo, live, brief and `docs/DEMO.md` on main (that link 404s until PR #10
+>    merges). Technical write-up left blank: there is none.
 > After both merges: delete this paragraph, and decide `AGENTS.md`/`CLAUDE.md` (untracked, written by `next dev`).
 > **Simplification S1 to S5 shipped 2026-09-30**: Shane merged PR #9 (`usability-all`, the five in order S1, S3, S2,
 > S4, S5) as `69b502b`; CI on main green (run 36732402640); PRs #4 to #8 closed unmerged, branches kept. The session's
