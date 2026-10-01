@@ -1,10 +1,13 @@
 # NEXT
 
 > **Pick up here: ship the live sheet, PR #3** (branch `sheet-link`, rebased onto main 2026-10-01, one commit, section
-> below). In this order: `npm run db:migrate:prod` (one add-only migration, `20260929000000_ros_link`), `SMARTSHEET_TOKEN`
-> into Vercel production (or leave it unset: Excel links work without it, Smartsheet says "not connected"), then Shane
-> merges the pull request, then the first real sync is the test of the untested services (section below). A merge to main
-> is Shane's click, not the session's.
+> below). CI on the PR is green (run 36876615819) and it is mergeable. **All three steps are Shane's, in his terminal, in
+> this order** (checked 2026-10-01: the session is refused production reads, so even `db:status:prod` is his):
+> 1. `npm run db:migrate:prod` (one add-only migration, `20260929000000_ros_link`; `db:status:prod` first to see it pending).
+> 2. `SMARTSHEET_TOKEN` into Vercel production, or leave it unset: Excel links work without it, Smartsheet says "not connected".
+> 3. Merge PR #3. The main-manual deploy hook ships it; then the first real sync is the test of the untested services (section
+>    below). A merge to main is Shane's click, not the session's.
+> After the merge: delete or rewrite this paragraph, and decide `AGENTS.md`/`CLAUDE.md` (untracked, written by `next dev`).
 > **The rebase 2026-10-01**: S1 to S5 never touched the run-of-show pages, so the only conflict was this file. The branch's
 > two test fixes were already on main (cherry-picked into `usability`), so the rebase dropped them; its billing note was
 > skipped. Gate on the rebased branch: lint, typecheck, `foundation:drift` clean; vitest 210 of 210 (50 s, load 6);
