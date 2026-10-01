@@ -84,16 +84,35 @@ async function smartsheet(link: URL, token: string | undefined, f: Fetch): Promi
   return parseCsv((await capped(await api(`/sheets/${sheet.id}`, 'text/csv'))).toString('utf8').replace(/^\uFEFF/, ''));
 }
 
-// ponytail: `download=1` is what turns a SharePoint or OneDrive for Business share link into the file. Personal
-// OneDrive links (1drv.ms) redirect first and were not tested against a real link; if they return a page, that is
-// the "web page, not a workbook" refusal below, and the fix is Microsoft Graph's /shares endpoint.
+// ponytail: `download=1` is what turns a share link into the file. A personal OneDrive link (1drv.ms) is proven
+// against the real service; a SharePoint or OneDrive for Business link is not. If Microsoft changes the chain, the
+// fix is Microsoft Graph's /shares endpoint.
+// Seen against a real 1drv.ms link (2026-10-01): OneDrive's edge answers 403 "The request is blocked" to a client
+// with no browser user agent, and the share hop sets a guest cookie (FedAuth) that the download hop wants back,
+// or it redirects to a sign-in. A cookie only ever returns to the exact host that set it.
+const BROWSER = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+
 async function excel(link: URL, f: Fetch): Promise<string[][]> {
   let url = new URL(link);
+  const jar = new Map<string, string>();
+  let jarHost = '';
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (on(url.hostname, SIGN_IN)) throw new Refused(`That link asks for a Microsoft sign-in. ${PUBLIC_LINK}`);
     if (url.protocol !== 'https:' || !on(url.hostname, MICROSOFT)) throw new Refused('That link leads somewhere other than OneDrive or SharePoint.');
-    if (hop === 0 || url.pathname.includes('/:x:/')) url.searchParams.set('download', '1');
-    const res = await f(url, { redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) });
+    // `set` rewrites the whole query, so it is skipped when the flag has already ridden along on a redirect.
+    if ((hop === 0 || url.pathname.includes('/:x:/')) && url.searchParams.get('download') !== '1') url.searchParams.set('download', '1');
+    if (url.hostname !== jarHost) {
+      jar.clear();
+      jarHost = url.hostname;
+    }
+    const headers: Record<string, string> = { 'User-Agent': BROWSER };
+    if (jar.size) headers.Cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+    const res = await f(url, { headers, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) });
+    for (const c of res.headers.getSetCookie()) {
+      const pair = c.split(';', 1)[0]!;
+      const eq = pair.indexOf('=');
+      if (eq > 0) jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+    }
     const to = res.headers.get('location');
     if (res.status >= 300 && res.status < 400 && to) {
       url = new URL(to, url);

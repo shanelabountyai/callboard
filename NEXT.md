@@ -42,6 +42,26 @@
 > `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`, on main.
 > **Every item:** run `gh run list --limit 3` before starting and after pushing. CI runs on main and on pull requests only.
 
+## First real sheet sync 2026-10-01 (branch `first-real-sync`, not merged)
+- **Decided by Shane 2026-10-01**: test the live sheet against a real link (over the technical write-up, PRD 6 P1, or
+  staying closed). Not to be asked again.
+- **The sheet**: Shane's personal OneDrive link (`1drv.ms/x/c/...`), "Multi_Day_Conference_Run_of_Show 1.xlsx", 52 lines
+  over three days, columns Day, Time, Location, Cue. Run through `fetchSheet` and `rosLines` from a script, not through
+  the page: `replaceImported` is the upload's code and was not exercised again.
+- **Three defects, all in the deployed code, the first two enough to make every personal OneDrive link fail**:
+  1. OneDrive's edge answers 403 "The request is blocked" to a client with no browser user agent. The page said "That
+     link is not open to everyone", which was wrong. `excel()` now sends one.
+  2. The share hop (`onedrive.live.com/:x:/...`) sets a guest cookie, `FedAuth`, and the file hop redirects to a sign-in
+     without it. `excel()` now carries cookies between hops, back to the exact host that set them and no other.
+  3. `excelTime` dropped AM and PM: "05:00 PM" was stored as 05:00. It reads "5:00 PM", "5pm" and "12:15 AM" now. The
+     file upload and the hand-added line had the same bug, through the same function.
+- Also: `download=1` is no longer re-set when a redirect already carries it, because `searchParams.set` rewrites the
+  whole query (`!` to `%21`) on an address Microsoft signed.
+- **Open, Shane to decide: the Day column is ignored.** The page sorts by time, so a three-day sheet shows as one day
+  with the days interleaved. `RunOfShowRow` has no day; a fix is a column and a migration.
+- Gate: lint and typecheck clean; vitest 211 of 211 (1 new in `tests/unit/sheet-link.test.ts`, the chain the real link
+  walked; AM and PM cases in `tests/unit/callboard-lib.test.ts`). No e2e run: no page changed. No migration.
+
 ## Closure 2026-10-01 (branch `closure`)
 - **Decided by Shane 2026-10-01**: do the closure deliverables (over running the live sheet's ship steps first, PRD 6 P1,
   or dropping the live sheet), on Sonnet. Not to be asked again.

@@ -63,10 +63,14 @@ export function readXlsx(buf: Buffer): string[][] {
   return rows.filter(Boolean).map((r) => Array.from(r, (v) => v ?? ''));
 }
 
-/** "9:30", "09:30:00" or Excel's 0.3958 (fraction of a day; a full datetime serial keeps its time part) → "09:30". */
+/** "9:30", "09:30:00", "5:00 PM", "5pm" or Excel's 0.3958 (fraction of a day; a full datetime serial keeps its time part) → "09:30". */
 export function excelTime(v: string): string {
-  const hm = /^(\d{1,2}):(\d{2})/.exec(v.trim());
-  if (hm) return `${hm[1]!.padStart(2, '0')}:${hm[2]}`;
+  const hm = /^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(?:([ap])\.?m\.?)?/i.exec(v.trim());
+  if (hm && (hm[2] || hm[3])) {
+    const half = hm[3]?.toLowerCase();
+    const h = (Number(hm[1]) % (half ? 12 : 24)) + (half === 'p' ? 12 : 0); // 12 AM is 00, 12 PM is 12
+    return `${String(h).padStart(2, '0')}:${hm[2] ?? '00'}`;
+  }
   const n = Number(v);
   if (!Number.isFinite(n) || v.trim() === '') return v.trim();
   const mins = Math.round((n % 1) * 1440) % 1440;
