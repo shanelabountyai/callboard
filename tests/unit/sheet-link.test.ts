@@ -109,9 +109,12 @@ describe('sheet link', () => {
 describe('run of show lines', () => {
   it('matches columns by header and numbers a repeated line', () => {
     expect(rosLines([['When', 'What', 'Room'], ['0.375', 'Doors', 'Lobby'], ['09:00', 'Doors', ''], ['', '', 'x']])).toEqual([
-      { at: '09:00', cue: 'Doors', area: 'Lobby', owner: '', sortOrder: 0, sourceKey: '09:00|Doors' },
-      { at: '09:00', cue: 'Doors', area: '', owner: '', sortOrder: 1, sourceKey: '09:00|Doors#2' },
+      { day: '', at: '09:00', cue: 'Doors', area: 'Lobby', owner: '', sortOrder: 0, sourceKey: '09:00|Doors' },
+      { day: '', at: '09:00', cue: 'Doors', area: '', owner: '', sortOrder: 1, sourceKey: '09:00|Doors#2' },
     ]);
+    // the same cue on two days is two lines, not a repeat; a date cell comes as Excel's serial
+    expect(rosLines([['Day', 'Time', 'Cue'], ['Day 1', '07:00 AM', 'Doors'], ['Day 2', '07:00 AM', 'Doors']])?.map((l) => [l.day, l.at, l.sourceKey])).toEqual([['Day 1', '07:00', 'Day 1|07:00|Doors'], ['Day 2', '07:00', 'Day 2|07:00|Doors']]);
+    expect(rosLines([['Date', 'Time', 'Cue'], ['46309', '0.375', 'Doors']])?.[0]?.day).toBe('2026-10-14');
     expect(rosLines([['Name', 'Phone'], ['Tom', '555']])).toBeNull();
     expect(rosLines([])).toBeNull();
   });

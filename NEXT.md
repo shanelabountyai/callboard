@@ -58,10 +58,18 @@
      file upload and the hand-added line had the same bug, through the same function.
 - Also: `download=1` is no longer re-set when a redirect already carries it, because `searchParams.set` rewrites the
   whole query (`!` to `%21`) on an address Microsoft signed.
-- **Open, Shane to decide: the Day column is ignored.** The page sorts by time, so a three-day sheet shows as one day
-  with the days interleaved. `RunOfShowRow` has no day; a fix is a column and a migration.
-- Gate: lint and typecheck clean; vitest 211 of 211 (1 new in `tests/unit/sheet-link.test.ts`, the chain the real link
-  walked; AM and PM cases in `tests/unit/callboard-lib.test.ts`). No e2e run: no page changed. No migration.
+- **Decided by Shane 2026-10-01**: store the day and group the page (over sheet order with no day, or leaving it). Not
+  to be asked again.
+- **The day**: `RunOfShowRow.day`, text, from a Day or Date header, as written ("Day 2"); a date cell arrives as Excel's
+  serial and is stored as "2026-10-14". The page shows one heading per day in the sheet's order, lines by time inside
+  it. A one-day sheet has no headings. Hand-added lines pick a day from the ones the sheet has; a line with none sits
+  first, under "Any day". The same cue at the same time on two days is two lines (`sourceKey` carries the day).
+- **One migration, `20261001000000_ros_day`**: it only adds. Applied to both local databases with `migrate deploy`.
+  **Production needs `npm run db:migrate:prod` before the merge**, then the deploy hook.
+- Skipped (add when asked): a day on a hand-added line when the sheet has none, a filter to one day, today's day first.
+- Gate: lint and typecheck clean; vitest 211 of 211 (the AM and PM cases, the OneDrive chain, the day cases); e2e, the run
+  of show spec alone, 1 of 1 against a production build, with the multi-day import added. The full e2e sweep is CI's.
+- Not checked: the page with the real 52-line sheet in a browser, the page on a phone.
 
 ## Closure 2026-10-01 (branch `closure`)
 - **Decided by Shane 2026-10-01**: do the closure deliverables (over running the live sheet's ship steps first, PRD 6 P1,

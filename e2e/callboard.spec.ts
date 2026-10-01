@@ -76,6 +76,17 @@ test('run of show: an .xlsx import replaces imported rows and keeps a hand-added
   await expect(page.getByRole('row').filter({ hasText: 'Doors open' })).toContainText('08:00');
   await expect(page.getByRole('row').filter({ hasText: 'Staff debrief' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Opening keynote' })).toHaveCount(0); // the seeded import row is gone
+  await expect(page.getByLabel('Day')).toHaveCount(0); // a one-day sheet shows no days
+
+  // A sheet with a Day column is grouped by day in the sheet's order, and a PM time is the afternoon.
+  const days = writeXlsx([['Day', 'Time', 'Cue'], ['Day 1', '05:00 PM', 'Load out'], ['Day 2', '07:00 AM', 'Crew call']]);
+  await page.getByLabel('File').setInputFiles({ name: 'days.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: days });
+  await page.getByRole('button', { name: 'Import' }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'Load out' })).toContainText('17:00');
+  await expect(page.locator('tbody').filter({ hasText: 'Day 1' })).toContainText('Load out');
+  await expect(page.locator('tbody').filter({ hasText: 'Day 2' })).toContainText('Crew call');
+  await expect(page.locator('tbody').filter({ hasText: 'Any day' })).toContainText('Staff debrief');
+  await expect(page.getByLabel('Day').getByRole('option')).toHaveText(['Day 1', 'Day 2']);
 
   // The live sheet: a link that is not Smartsheet, OneDrive or SharePoint is refused before anything is fetched.
   await page.getByLabel('Sheet link').fill('https://example.com/ros.xlsx');

@@ -18,11 +18,11 @@ const page = (ctx: OrgCtx, eventId: string) => `/o/${ctx.slug}/events/${eventId}
 
 export const addRosRow = orgAction(
   null,
-  z.object({ eventId: ref('event'), at: z.string().trim().max(10).default(''), cue: z.string().trim().min(1, 'What happens?').max(200), area: z.string().trim().max(80).default(''), owner: z.string().trim().max(80).default('') }),
+  z.object({ eventId: ref('event'), day: z.string().trim().max(40).default(''), at: z.string().trim().max(10).default(''), cue: z.string().trim().min(1, 'What happens?').max(200), area: z.string().trim().max(80).default(''), owner: z.string().trim().max(80).default('') }),
   async (ctx, i) => {
     must(await db.event.findFirst({ where: { id: i.eventId, ...inOrg(ctx) }, select: { id: true } }));
     const id = randomUUID();
-    await db.runOfShowRow.create({ data: { id, ...inOrg(ctx), eventId: i.eventId, sourceKey: `manual:${id}`, manual: true, at: excelTime(i.at), cue: i.cue, area: i.area, owner: i.owner, sortOrder: 0 } });
+    await db.runOfShowRow.create({ data: { id, ...inOrg(ctx), eventId: i.eventId, sourceKey: `manual:${id}`, manual: true, day: i.day, at: excelTime(i.at), cue: i.cue, area: i.area, owner: i.owner, sortOrder: 0 } });
     redirect(page(ctx, i.eventId));
   },
 );
