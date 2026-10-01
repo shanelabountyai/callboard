@@ -1,7 +1,7 @@
 # NEXT
 
 > **Pick up here: two pull requests are Shane's to merge, then the project is closed.**
-> 1. **PR `closure` → main** (branch `closure`, off main, 2026-10-01): the four closure deliverables (section below). Once
+> 1. **PR #10, `closure` → main** (branch `closure`, off main, 2026-10-01): the four closure deliverables (section below). CI run 36883418946. Once
 >    deployed it changes production: the cron drops from every 5 minutes to **once a day** (`vercel.json`, cost review).
 >    Deploy is the main-manual hook, as before.
 > 2. **PR #3, the live sheet** (branch `sheet-link`, rebased onto main 2026-10-01, one commit; its notes are in that
