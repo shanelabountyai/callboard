@@ -1,18 +1,16 @@
 # NEXT
 
-> **Pick up here: PR #10 is Shane's to merge, then the project is closed.**
-> 1. **PR #10, `closure` → main** (branch `closure`, main merged in 2026-10-01 after PR #3): the four closure
->    deliverables (section below). Once deployed it changes production: the cron drops from every 5 minutes to **once a
->    day** (`vercel.json`, cost review). Deploy is the main-manual hook, as before.
-> 2. ~~PR #3, the live sheet~~: **merged by Shane 2026-10-01** as `712b341`, after `npm run db:migrate:prod`
->    (`20260929000000_ros_link`) in his terminal. `SMARTSHEET_TOKEN` was skipped: Excel, OneDrive and SharePoint links
->    work without it, a Smartsheet link says "not connected". Add it with `vercel env add SMARTSHEET_TOKEN production`,
->    then a code push or the deploy hook. **The first real Sync click in production is still the test of the untested
->    services.** The brief's honesty block and `docs/DEMO.md` now say deployed, not yet run against the real services.
-> 3. ~~Build log~~: the Callboard row is in the build log (https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj, version
->    20, 2026-10-01): rank 11b, shipped, repo, live, brief and `docs/DEMO.md` on main (that link 404s until PR #10
->    merges). Technical write-up left blank: there is none.
-> After the merge: delete this paragraph, and decide `AGENTS.md`/`CLAUDE.md` (untracked, written by `next dev`).
+> **The project is closed (2026-10-01). Nothing is queued.** Both pull requests are merged by Shane and deployed by the
+> main-manual hook: PR #3, the live sheet (`712b341`, after `npm run db:migrate:prod`, `20260929000000_ros_link`), and
+> PR #10, the closure deliverables (`0a464cb`, section below). `callboard-ltxust0x1` is Ready on production; the cron is
+> once a day (`0 13 * * *`; restore `*/5 * * * *` the week before any real event). CI on main after PR #3 passed (run
+> 36889818823). Checked from outside only: the site and the cron answer 401 without their secrets.
+> **Open, when wanted**: `SMARTSHEET_TOKEN` was skipped (`vercel env add SMARTSHEET_TOKEN production`, then the deploy
+> hook); Excel, OneDrive and SharePoint links work without it, a Smartsheet link says "not connected". **No real sheet
+> has been synced in production**: the first Sync click is the test of the untested services. Re-measure Neon compute
+> about 2026-10-08 (command in the cost review below). PRD 6 P1 waits until asked for.
+> The build log row: https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj (version 20). No technical write-up exists.
+> `AGENTS.md` and `CLAUDE.md` (written by `next dev`) are committed, so the tree stays clean.
 > **`gh` in Shane's terminal** needed `gh repo set-default shanelabountyai/callboard` (two remotes, `origin` and
 > `template`); set 2026-10-01. Never put a `# comment` with parentheses on a command line for him: zsh reads it as a pattern.
 > **The e2e alarm is proven** (2026-10-01): a spec made to fail (`expect(1).toBe(2)`) fired the monitor on its inline `✘`
