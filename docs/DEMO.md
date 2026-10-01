@@ -172,7 +172,8 @@ report counts only shifts that have ended, so on a fresh seed it reads zeros unt
 - **Nothing is wired for scale.** The first close sends every thank-you in one transaction (fine to about 500
   people); the board polls every 10 seconds rather than pushing.
 - **The live sheet (Smartsheet or Excel link with a Sync button) is built and tested against stand-ins, not the real
-  services**, and is on pull request #3, not in production. The file upload is what production has.
+  services.** It is in production, but no real sheet has been synced there yet, and no Smartsheet token is set, so a
+  Smartsheet link says "not connected". The file upload is the path that has been used.
 - **Not reviewed:** keyboard focus order and colour contrast on the planner pages; Safari on plain http.
 - **Deliberately not built:** readiness flags, QR-poster self check-in, a per-person message thread, a what-changed
   notice when a shift is edited, cron-driven sheet pulls, pushing check-ins back out to a sheet.

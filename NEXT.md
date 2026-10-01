@@ -1,20 +1,23 @@
 # NEXT
 
-> **Pick up here: two pull requests are Shane's to merge, then the project is closed.**
-> 1. **PR #10, `closure` → main** (branch `closure`, off main, 2026-10-01): the four closure deliverables (section below). CI run 36883418946. Once
->    deployed it changes production: the cron drops from every 5 minutes to **once a day** (`vercel.json`, cost review).
->    Deploy is the main-manual hook, as before.
-> 2. **PR #3, the live sheet** (branch `sheet-link`, rebased onto main 2026-10-01, one commit; its notes are in that
->    branch's NEXT.md). CI green (run 36876615819). **All three ship steps are Shane's, in his terminal, in this order**
->    (the session is refused production reads, so even `db:status:prod` is his): `npm run db:migrate:prod` (one add-only
->    migration, `20260929000000_ros_link`); `SMARTSHEET_TOKEN` into Vercel production, or leave it unset (Excel links
->    work without it, Smartsheet says "not connected"); merge. The first real sync is the test of the untested services.
->    Whichever of the two merges second will conflict on this file only. If PR #3 merges, take the "not deployed" line out
->    of the brief's honesty block and out of `docs/DEMO.md`'s concessions.
+> **Pick up here: PR #10 is Shane's to merge, then the project is closed.**
+> 1. **PR #10, `closure` → main** (branch `closure`, main merged in 2026-10-01 after PR #3): the four closure
+>    deliverables (section below). Once deployed it changes production: the cron drops from every 5 minutes to **once a
+>    day** (`vercel.json`, cost review). Deploy is the main-manual hook, as before.
+> 2. ~~PR #3, the live sheet~~: **merged by Shane 2026-10-01** as `712b341`, after `npm run db:migrate:prod`
+>    (`20260929000000_ros_link`) in his terminal. `SMARTSHEET_TOKEN` was skipped: Excel, OneDrive and SharePoint links
+>    work without it, a Smartsheet link says "not connected". Add it with `vercel env add SMARTSHEET_TOKEN production`,
+>    then a code push or the deploy hook. **The first real Sync click in production is still the test of the untested
+>    services.** The brief's honesty block and `docs/DEMO.md` now say deployed, not yet run against the real services.
 > 3. ~~Build log~~: the Callboard row is in the build log (https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj, version
 >    20, 2026-10-01): rank 11b, shipped, repo, live, brief and `docs/DEMO.md` on main (that link 404s until PR #10
 >    merges). Technical write-up left blank: there is none.
-> After both merges: delete this paragraph, and decide `AGENTS.md`/`CLAUDE.md` (untracked, written by `next dev`).
+> After the merge: delete this paragraph, and decide `AGENTS.md`/`CLAUDE.md` (untracked, written by `next dev`).
+> **`gh` in Shane's terminal** needed `gh repo set-default shanelabountyai/callboard` (two remotes, `origin` and
+> `template`); set 2026-10-01. Never put a `# comment` with parentheses on a command line for him: zsh reads it as a pattern.
+> **The e2e alarm is proven** (2026-10-01): a spec made to fail (`expect(1).toBe(2)`) fired the monitor on its inline `✘`
+> line, and again on `EXIT=1`. The 2026-09-29 silence is still unexplained, but the pattern and the wiring are right: tail
+> the log file, `grep -E --line-buffered "✘|EXIT="`, `sed -u`, exit the loop on `EXIT=`.
 > **Simplification S1 to S5 shipped 2026-09-30**: Shane merged PR #9 (`usability-all`, the five in order S1, S3, S2,
 > S4, S5) as `69b502b`; CI on main green (run 36732402640); PRs #4 to #8 closed unmerged, branches kept. The session's
 > own fast-forward of main was refused by the permission classifier (merge without review): a merge to main is Shane's
@@ -24,19 +27,14 @@
 > anywhere; the events list says Staffing and Closed with "Start a new event from this one" on each; `/o/acme/templates`
 > 404; `/p/<unknown>` 404; SMS webhook 405 on a GET; cron 401. No migration, `seed:prod` not rerun. Not clicked
 > through in production: an event page, a phone page, a close.
-> **Before the next sweep**: prove the e2e alarm on a spec made to fail (below).
 > **What the merge cost**: "Save as a template" and the Templates page are gone ("Start a new event from this one"
 > replaces them); a lead cannot release anyone from the phone; `setStatus` takes `staffing` or `closed` only.
 > **To look locally use `npm run dev`**, never a plain `npm run build`: a production build reads `.env.production.local`
 > and the cloud-database guard refuses it (INV-18). Phone links in the dev database die with a reseed; mint new ones
 > with `ensurePersonLink` from `src/lib/links.ts`.
-> **The e2e failure alarm did not fire** on the 2026-09-29 sweep, not even on its `EXIT=` line, though the same filter
-> run by hand against the finished log matches; cause unknown. Before the next sweep relies on an alarm, prove it on a
-> spec made to fail. The results above were read from the log itself.
 > Shane used the product on 2026-09-29 and found it too complicated to use. The review agreed for the planner side.
 > He chose all five changes, in ranked order, one per session. **Simplify before adding anything**: PRD 6 P1 and the
 > closure deliverables wait behind S1 to S5.
-> **Held, not abandoned**: the live sheet, PR #3 (draft), branch `sheet-link`. Its notes are in that branch's NEXT.md.
 > **CI runs again** (2026-09-29): run 36586741222 on S1's pull request passed in 5 minutes. The two failures before it, on
 > `sheet-link`, were the billing refusal (3 seconds each); re-run them when the live sheet is picked up.
 > Callboard is live at https://callboard.labintelligence.co behind the shared password (moved 2026-09-28).
@@ -58,7 +56,8 @@
   linking it anywhere). Same composition as the sibling briefs, Callboard's own tokens. Numbers from the suite itself:
   vitest 204 (`vitest list`), e2e 18 in 7 files, event page 38 → 2 buttons. Its two screenshots were taken fresh from the
   running app on main (the archived S3 shot shows the old 12-item top bar). The honesty block says the live sheet is
-  not deployed and that no planner has sat with the product.
+  deployed but has not met a real spreadsheet (version 2, 2026-10-01, after PR #3) and that no planner has sat with
+  the product.
 - **LinkedIn**: five drafts in the Lab Intelligence Ledger (https://claude.ai/artifact/Ai5xKScgT2sWtqXRQ1ZA8i, version
   53), n89 to n93, project `callboard` (added to the ledger's project list), pillars Scale, Impact, AI, MarTech, Scale,
   at the end of the queue with no two adjacent sharing a pillar. Sources point at the brief's sections; `tech` is null
@@ -113,7 +112,7 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
 8. ~~PRD 3 swaps~~ built 2026-09-28 on branch `prd3-swaps`, stacked on `foundation-v1.2.0` (below). On main 2026-09-28.
 9. ~~Availability and Preview builds~~ built 2026-09-28 on branch `availability` (below). On main 2026-09-28, PR #1.
 10. **Simplification S1 to S5** (below), chosen by Shane 2026-09-29. One item per session, in order.
-11. The live sheet, PR #3: held until S1 has reshaped the event pages, then rebased into the new layout.
+11. **The live sheet, PR #3**: built 2026-09-28, rebased onto main 2026-10-01 (below). Waits for the migration, the token and Shane's merge.
 12. PRD 6 P1, when asked: proposed edits from the report, checklist ticks on the day, the incident log, update-the-template-it-came-from with the diff shown.
 
 ## Simplification 2026-09-29 (backlog 10)
@@ -328,6 +327,48 @@ QR-poster self check-in, lead override of the 3-hour early rule, per-person mess
   report now read ended shifts only. S3's version of those steps uses the stage buttons: keep both when they meet.
 - Not checked: keyboard order into the report's folds, the report on a phone, a review saved on the old form and opened
   on the new one in a browser (the integration test covers the save).
+
+## Live sheet 2026-09-28 (asked for by Shane: "link to live docs for both with a sync button")
+- **What it is**: the Run of show page has a "Live sheet" section. A planner pastes the sheet's link and presses
+  **Link and sync**; after that the button reads **Sync now**. Sync pulls the sheet as it is at that moment, replaces the
+  imported rows and keeps the hand-added ones, the same rule as the file upload. A blank link disconnects. The page shows
+  when it last synced. The file upload stays, as "Import a file".
+- **Smartsheet**: through its API as CSV, with `SMARTSHEET_TOKEN`. The address bar holds the sheet's key and the API wants
+  its id, so each sync reads the account's list of sheets and matches the link's path against `permalink`.
+- **Excel**: a OneDrive or SharePoint share link set to "Anyone with the link can view", fetched with `download=1` and
+  read by the existing .xlsx reader. No Microsoft sign-in and no app registration.
+- **The trust boundary** (`src/lib/sheet-link.ts`): the link is typed by a user and fetched from the server. https only;
+  `app.smartsheet.com` and five Microsoft domains only; redirects are followed by hand, five at most, each one checked
+  against the same list; 5 MB cap, counted while reading; 15 s timeout. A redirect to a Microsoft sign-in is refused
+  with words that say so. The token goes to `api.smartsheet.com` and nowhere else.
+- **Defaults taken, all reversible, Shane to confirm**: the link is for the run of show, not for people or shifts (a
+  person removed from a sheet after confirming needs a rule first); sync happens on the button only, the cron does not
+  pull; any member of the org can sync, the same as adding a line; one Smartsheet token for the whole deployment.
+- **Known ceiling**: with one token, anyone who can sign in can pull any sheet the token's account can open, if they hold
+  its link. On the demo that is anyone with the shared password. Use a Smartsheet account that holds only demo sheets,
+  or leave the token unset. Per-org tokens, encrypted, are the upgrade (`ponytail:` note in the file).
+- **Not tested against the real services**: Smartsheet's list and CSV endpoints, a real SharePoint share link, and a
+  personal OneDrive link (`1drv.ms`), which redirects before it downloads and may return a page instead of the file.
+  The unit tests drive a stand-in for both services. The first real sync is the test.
+- `SMARTSHEET_TOKEN` is read from `process.env`, not `@/core/env`, and is not in `.env.example` (INV-14), the same as
+  `DEMO_ACCESS_PASSWORD`. The empty line is in `.env.local` for dev.
+- One migration, `20260929000000_ros_link`: `Event.rosUrl` and `Event.rosSyncedAt`. It only adds. Written by hand and
+  applied with `prisma migrate deploy` to both local databases. A template or a copied event does not carry the link.
+- `src/lib/ros.ts` now holds the column matching and the replace, shared by the upload route and the sync.
+- Skipped (add when asked): the cron pulling linked sheets, a sync for the people directory, pushing check-ins out to a
+  sheet, Smartsheet's EU region (`app.smartsheet.eu`), storing the sheet id beside the link, a saved column mapping.
+- **Found on the way**: `callboard-swaps.test.ts` failed between 00:00 and about 12:00 UTC. Its event day is two days
+  out at 00:00 UTC and the test advanced the clock two days to get "past call time", which is only true after midday
+  UTC. It advances three days now. CI on main would have gone red on any push in that window.
+- **Found on the way**: the e2e suite could not sign in on this laptop. `next build` and `next start` read
+  `.env.production.local` by themselves, and since the gate shipped that file holds `DEMO_ACCESS_PASSWORD`, so the test
+  server answered 401 to everything. Playwright counts a 401 on the health check as "up", so it showed as a 30 s timeout
+  on the first click. `playwright.config.ts` now sets the variable blank for the test server (Next never overwrites a
+  variable that is already set). **Anything added to `.env.production.local` reaches local production builds.** Texts
+  were never at risk: real sends need `VERCEL_ENV=production` or `SMS_SANDBOX_TO`.
+- Gate: lint and typecheck clean; vitest 203 of 203 (6 new in `tests/unit/sheet-link.test.ts`; the redirect test was seen
+  to fail with the host check removed); e2e `callboard` + `headers` 10 of 10 against a production build, with one new
+  check that a link to another host is refused; `foundation:drift` clean against v1.2.0.
 
 ## Shipped 2026-09-28: phase 3, foundation v1.2.0, swaps
 - Production got the four add-only migrations first (`db:status:prod` named exactly those four as pending), then main was
