@@ -6,8 +6,9 @@
 > once a day (`0 13 * * *`; restore `*/5 * * * *` the week before any real event). CI on main after PR #3 passed (run
 > 36889818823). Checked from outside only: the site and the cron answer 401 without their secrets.
 > **Open, when wanted**: `SMARTSHEET_TOKEN` was skipped (`vercel env add SMARTSHEET_TOKEN production`, then the deploy
-> hook); Excel, OneDrive and SharePoint links work without it, a Smartsheet link says "not connected". **No real sheet
-> has been synced in production**: the first Sync click is the test of the untested services. Re-measure Neon compute
+> hook); Excel, OneDrive and SharePoint links work without it, a Smartsheet link says "not connected". **A real personal OneDrive
+> sheet syncs locally as of 2026-10-01 (PR #11, branch `first-real-sync`, section below); production runs the broken
+> code until that is merged and deployed.** Still untested: SharePoint, Smartsheet. Re-measure Neon compute
 > about 2026-10-08 (command in the cost review below). PRD 6 P1 waits until asked for.
 > The build log row: https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj (version 20). No technical write-up exists.
 > `AGENTS.md` and `CLAUDE.md` (written by `next dev`) are committed, so the tree stays clean.
