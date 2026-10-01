@@ -154,7 +154,7 @@ report counts only shifts that have ended, so on a fresh seed it reads zeros unt
 | Invite sent, no text arrived | the number is a `+1555` demo number, or the number is not in the directory | add yourself under People with a real mobile |
 | Text arrived, link says expired or 404 | `AUTH_SECRET` was rotated (every link dies) or the database was reseeded | invite again; locally, `npm run links` |
 | A phone page shows another person after a reseed | links are per person per event, the ids changed | `npm run links` again |
-| Lead page: "Can't reach them" is missing on an overdue row | the alert appears when the cron sweeps, up to 5 minutes after the person turns red | wait, or say so |
+| Lead page: "Can't reach them" is missing on an overdue row; no-show alerts and reminders do not arrive | the cron that raises them runs once a day in production (cost review, 2026-10-01); invites and replies send at once, the cron is only retries and sweeps | say so; before a real event put `*/5 * * * *` back in `vercel.json` |
 | Board says 0 confirmed where Staff says 2 | the board counts people here, Confirmed is a separate column | read the column headings |
 | Report reads zeros | only shifts that have ended are counted | expected before the event |
 | Local: `npm run dev` refuses to start | `swapcheck`: under 18% memory available | stop other projects' dev servers (`devservers`) |
