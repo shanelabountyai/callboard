@@ -1,17 +1,20 @@
 # NEXT
 
-> **Pick up here: ship the live sheet, PR #3** (branch `sheet-link`, rebased onto main 2026-10-01, one commit, section
-> below). CI on the PR is green (run 36876615819) and it is mergeable. **All three steps are Shane's, in his terminal, in
-> this order** (checked 2026-10-01: the session is refused production reads, so even `db:status:prod` is his):
-> 1. `npm run db:migrate:prod` (one add-only migration, `20260929000000_ros_link`; `db:status:prod` first to see it pending).
-> 2. `SMARTSHEET_TOKEN` into Vercel production, or leave it unset: Excel links work without it, Smartsheet says "not connected".
-> 3. Merge PR #3. The main-manual deploy hook ships it; then the first real sync is the test of the untested services (section
->    below). A merge to main is Shane's click, not the session's.
-> After the merge: delete or rewrite this paragraph, and decide `AGENTS.md`/`CLAUDE.md` (untracked, written by `next dev`).
-> **The rebase 2026-10-01**: S1 to S5 never touched the run-of-show pages, so the only conflict was this file. The branch's
-> two test fixes were already on main (cherry-picked into `usability`), so the rebase dropped them; its billing note was
-> skipped. Gate on the rebased branch: lint, typecheck, `foundation:drift` clean; vitest 210 of 210 (50 s, load 6);
-> e2e `callboard` + `headers` 11 of 11 (one new check: a link to another host is refused) against a production build.
+> **Pick up here: PR #10 is Shane's to merge, then the project is closed.**
+> 1. **PR #10, `closure` → main** (branch `closure`, main merged in 2026-10-01 after PR #3): the four closure
+>    deliverables (section below). Once deployed it changes production: the cron drops from every 5 minutes to **once a
+>    day** (`vercel.json`, cost review). Deploy is the main-manual hook, as before.
+> 2. ~~PR #3, the live sheet~~: **merged by Shane 2026-10-01** as `712b341`, after `npm run db:migrate:prod`
+>    (`20260929000000_ros_link`) in his terminal. `SMARTSHEET_TOKEN` was skipped: Excel, OneDrive and SharePoint links
+>    work without it, a Smartsheet link says "not connected". Add it with `vercel env add SMARTSHEET_TOKEN production`,
+>    then a code push or the deploy hook. **The first real Sync click in production is still the test of the untested
+>    services.** The brief's honesty block and `docs/DEMO.md` now say deployed, not yet run against the real services.
+> 3. ~~Build log~~: the Callboard row is in the build log (https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj, version
+>    20, 2026-10-01): rank 11b, shipped, repo, live, brief and `docs/DEMO.md` on main (that link 404s until PR #10
+>    merges). Technical write-up left blank: there is none.
+> After the merge: delete this paragraph, and decide `AGENTS.md`/`CLAUDE.md` (untracked, written by `next dev`).
+> **`gh` in Shane's terminal** needed `gh repo set-default shanelabountyai/callboard` (two remotes, `origin` and
+> `template`); set 2026-10-01. Never put a `# comment` with parentheses on a command line for him: zsh reads it as a pattern.
 > **The e2e alarm is proven** (2026-10-01): a spec made to fail (`expect(1).toBe(2)`) fired the monitor on its inline `✘`
 > line, and again on `EXIT=1`. The 2026-09-29 silence is still unexplained, but the pattern and the wiring are right: tail
 > the log file, `grep -E --line-buffered "✘|EXIT="`, `sed -u`, exit the loop on `EXIT=`.
@@ -40,6 +43,43 @@
 > await `requireOrg`/`requireUser` first or carry a `// public: <reason>` line, and every id-like action field needs
 > `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`, on main.
 > **Every item:** run `gh run list --limit 3` before starting and after pushing. CI runs on main and on pull requests only.
+
+## Closure 2026-10-01 (branch `closure`)
+- **Decided by Shane 2026-10-01**: do the closure deliverables (over running the live sheet's ship steps first, PRD 6 P1,
+  or dropping the live sheet), on Sonnet. Not to be asked again.
+- **`docs/DEMO.md`**: every command in it was run on 2026-10-01 against the local database and against production (401
+  without the password, 200 with it, all six demo accounts listed). `npm run links` (`scripts/links.ts`) is new: one
+  phone link per person for an event, because nothing else prints them on a laptop where no text can arrive. Found on
+  the way: an event cannot be renamed or deleted from the app, and `seed:prod` skips Spring Expo while one exists, so a
+  used production demo is reset by a copy ("Start a new event from this one") or a `DELETE` from Shane's terminal.
+- **Exec brief, "Callboard in Brief"**: https://claude.ai/artifact/AmmeAmYCareg3MWJb1QVYS (private; share it before
+  linking it anywhere). Same composition as the sibling briefs, Callboard's own tokens. Numbers from the suite itself:
+  vitest 204 (`vitest list`), e2e 18 in 7 files, event page 38 → 2 buttons. Its two screenshots were taken fresh from the
+  running app on main (the archived S3 shot shows the old 12-item top bar). The honesty block says the live sheet is
+  deployed but has not met a real spreadsheet (version 2, 2026-10-01, after PR #3) and that no planner has sat with
+  the product.
+- **LinkedIn**: five drafts in the Lab Intelligence Ledger (https://claude.ai/artifact/Ai5xKScgT2sWtqXRQ1ZA8i, version
+  53), n89 to n93, project `callboard` (added to the ledger's project list), pillars Scale, Impact, AI, MarTech, Scale,
+  at the end of the queue with no two adjacent sharing a pillar. Sources point at the brief's sections; `tech` is null
+  (no technical write-up). Hooks: "ran an event through it myself, couldn't use it" (38 → 2); "fire a volunteer with
+  one thumb" (Can't reach them); "7 no-shows, 100%, the event hadn't started" (one rule, `ended()`); "the login is a
+  text message" (links); "a no-show is a timer" (the chain). Reuse risk: the no-show-count post sits near the "tests
+  green, still broken" family already queued; its lesson is "one definition in one place".
+- **Cost review, measured 2026-10-01**:
+
+  | What | Measured | Decision | Restore |
+  |---|---|---|---|
+  | Vercel, project `callboard`, September | $0.27: 72 build minutes $0.25 (92%), everything else 2 cents | keep; auto-deploy is already off (`"git": { "deploymentEnabled": false }`), deploys are the manual hook | n/a |
+  | Vercel cron `/api/cron` | `*/5 * * * *`, about 8,600 invocations a month; the invocations cost nothing, but each one queries Neon | **slowed to `0 13 * * *`** (once a day, 8 am Central). Invites, replies, check-ins and every text send at once; the cron is retries, reminders, no-show alerts, the automatic start and the review nag | `*/5 * * * *` in `vercel.json` the week before any real event; the no-show chain needs it |
+  | Neon project `callboard` (shiny-tree-44811929) | `suspend_timeout_seconds: 0` (the default 5-minute auto-suspend), 0.25 to 8 CU. With a 5-minute cron the compute never suspends: about 180 CU-hours a month. `projects get` reads zero for everything because the consumption window reset at 2026-10-01 00:00 UTC | keep the project; the cron change is what lets it suspend. Re-measure in a week: `neonctl projects get shiny-tree-44811929 --org-id org-morning-smoke-06224724 --output json`, `compute_time_seconds` | n/a |
+  | Twilio number | one number, pay per text, no 10DLC | keep: the demo's texts need it | n/a |
+  | GitHub Actions | on push to main and pull requests only, about 3.5 minutes a run; no schedule | keep | n/a |
+  | Resend, Stripe, LLM calls | none configured, none in the product | nothing to turn off | n/a |
+
+  Baseline to check against: Vercel $0.27 for September; Neon compute 0 at the window's start, expected well under
+  180 CU-hours for October once the daily cron is deployed.
+- Gate on this branch: lint and typecheck clean; `scripts/links.ts` ran against the local database (12 links, 3 leads).
+  No test changed; no migration.
 
 ## Callboard (onsite staffing) — phase 2 built 2026-09-26, phase 3 first slice built 2026-09-27
 PRDs (Claude Doc, edit inline): https://claude.ai/code/artifact/7eb03633-a1df-456e-bea8-c28565893944
