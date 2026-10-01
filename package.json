@@ -30,6 +30,7 @@
     "seed:demo:test": "dotenv -e .env.test -e .env.local -- tsx scripts/seed-demo.ts",
     "seed:callboard": "dotenv -e .env.local -- tsx scripts/seed-callboard.ts",
     "seed:callboard:test": "dotenv -e .env.test -e .env.local -- tsx scripts/seed-callboard.ts",
+    "links": "dotenv -e .env.local -- tsx scripts/links.ts",
     "db:setup": "tsx scripts/db-setup.ts",
     "new-project": "tsx scripts/new-project.ts",
     "foundation:drift": "tsx scripts/foundation-drift.ts",
