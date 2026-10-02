@@ -5,7 +5,7 @@
 **Repo:** https://github.com/shanelabountyai/callboard (private)
 **Live demo:** https://callboard.labintelligence.co (shared password, synthetic demo data only). The full demo runs locally from [`docs/DEMO.md`](docs/DEMO.md)
 **Built with:** Claude Code + Next.js (App Router), TypeScript, Postgres + Prisma, Twilio SMS, hand-written CSS design tokens, Vercel
-**Status:** Closed 2026-10-01, with one follow-up (the first real sheet sync, PR #11) shipped 2026-10-02 · A Sync of a real sheet in production is not done · Last synced: 2026-10-02
+**Status:** Closed 2026-10-01, with one follow-up (the first real sheet sync, PR #11) shipped 2026-10-02 · A real OneDrive sheet synced in production 2026-10-02 (52 lines, three days) · Last synced: 2026-10-02
 **Exec brief (non-technical):** https://claude.ai/artifact/AmmeAmYCareg3MWJb1QVYS
 
 ---
@@ -58,7 +58,7 @@ It is a clone of my SaaS foundation template (v1.2.0), so auth, organisations, t
 
 A small fourth thing sat next to them: `searchParams.set('download', '1')` rewrites the whole query string (`!` becomes `%21`) on an address Microsoft had signed, so it is no longer set when a redirect already carries it.
 
-I picked this as the hardest because it is the only one no test I could write beforehand would have found. The unit tests were not wrong; they tested my idea of OneDrive. Each defect also hid the next: nothing reached the cookie bug until the user agent was fixed, and nothing reached the time bug until a file downloaded. The fix is in three places in `sheet-link.ts` and `ros.ts`, each with a case in `tests/unit/sheet-link.test.ts` (the OneDrive chain, the AM and PM cases). The part that is still open is the part I could not test: a Sync of the real sheet through the deployed page. I ran the real file through `fetchSheet` and `rosLines` from a script, not through the page, and SharePoint and Smartsheet links have never met their real services.
+I picked this as the hardest because it is the only one no test I could write beforehand would have found. The unit tests were not wrong; they tested my idea of OneDrive. Each defect also hid the next: nothing reached the cookie bug until the user agent was fixed, and nothing reached the time bug until a file downloaded. The fix is in three places in `sheet-link.ts` and `ros.ts`, each with a case in `tests/unit/sheet-link.test.ts` (the OneDrive chain, the AM and PM cases). I first ran the real file through `fetchSheet` and `rosLines` from a script. The Sync through the deployed page came a day later, on 2026-10-02: 52 lines under three day headings, afternoon times kept. SharePoint and Smartsheet links have still never met their real services.
 
 **What I'd instrument next time:** a real-service smoke check, run by hand once, before the feature is called shipped. A stand-in proves the code does what I think the service does. It cannot prove what the service does.
 
@@ -91,7 +91,7 @@ Each of these cost a debugging pass. The lesson from each is written into `NEXT.
 - **11 pull requests.** Six merged (#1, #2, #3, #9, #10, #11, with #9 carrying the simplification), and #4 to #8, the five S-items, were closed unmerged because they shipped together in #9.
 - **Event page, before and after S1:** 38 buttons to 2, 25 deletes to 0 on the default view, 838 words to 643.
 - **Vercel cost:** $0.27 for September, 92% of it build minutes. Cron slowed from every 5 minutes (about 8,600 calls a month) to once a day.
-- **What is not real:** the dataset is synthetic and the site is a demo behind a shared password. No planner has used it. Smartsheet and SharePoint links have never been tested against the real services, and a Sync of a real sheet in production has not been run. There is no Resend key (so planners sign in by the demo button, not by email) and no 10DLC registration, so SMS volume is limited to a single number. The cron runs once a day and has to go back to every 5 minutes before any real event, because the no-show chain needs it.
+- **What is not real:** the dataset is synthetic and the site is a demo behind a shared password. No planner has used it. Smartsheet and SharePoint links have never been tested against the real services; only a personal OneDrive link has synced in production. There is no Resend key (so planners sign in by the demo button, not by email) and no 10DLC registration, so SMS volume is limited to a single number. The cron runs once a day and has to go back to every 5 minutes before any real event, because the no-show chain needs it.
 
 ---
 

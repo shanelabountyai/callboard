@@ -9,7 +9,7 @@
 > hook); Excel, OneDrive and SharePoint links work without it, a Smartsheet link says "not connected". **PR #11, the first real sheet
 > sync, shipped 2026-10-02** (section below): `db:migrate:prod`, merged by Shane as `e5d7112`, CI on main green (run
 > 37025748566), deployed by the hook as `callboard-ay2iekya8` (built from `e5d7112`). Checked from outside only: 401,
-> cron 401, SMS webhook 405. **Not done: a Sync of the real sheet in production.** Still untested: SharePoint, Smartsheet.
+> cron 401, SMS webhook 405. **A Sync of the real sheet in production passed 2026-10-02** (Shane, as owner@acme.demo.test on Spring Expo: 52 lines, three day headings, PM times kept; shown as 24-hour, fixed on `ros-12-hour`). Still untested: SharePoint, Smartsheet.
 > The session cannot fire the deploy hook (refused as a production deploy); Shane runs the `curl` on `77057d2`'s address. Re-measure Neon compute
 > about 2026-10-08 (command in the cost review below). PRD 6 P1 waits until asked for.
 > The build log row: https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj (version 20). **Technical write-up: `WRITEUP.md`**
