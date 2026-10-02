@@ -9,10 +9,13 @@
 > hook); Excel, OneDrive and SharePoint links work without it, a Smartsheet link says "not connected". **PR #11, the first real sheet
 > sync, shipped 2026-10-02** (section below): `db:migrate:prod`, merged by Shane as `e5d7112`, CI on main green (run
 > 37025748566), deployed by the hook as `callboard-ay2iekya8` (built from `e5d7112`). Checked from outside only: 401,
-> cron 401, SMS webhook 405. **Not done: a Sync of the real sheet in production.** Still untested: SharePoint, Smartsheet.
+> cron 401, SMS webhook 405. **A Sync of the real sheet in production passed 2026-10-02** (Shane, as owner@acme.demo.test on Spring Expo: 52 lines, three day headings, PM times kept; shown as 24-hour, fixed on `ros-12-hour`). Still untested: SharePoint, Smartsheet.
 > The session cannot fire the deploy hook (refused as a production deploy); Shane runs the `curl` on `77057d2`'s address. Re-measure Neon compute
 > about 2026-10-08 (command in the cost review below). PRD 6 P1 waits until asked for.
-> The build log row: https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj (version 20). No technical write-up exists.
+> The build log row: https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj (version 20). **Technical write-up: `WRITEUP.md`**
+> (2026-10-02, chosen by Shane over staying closed, PRD 6 P1 and a real Smartsheet test; same eight sections as the
+> storage and rental write-ups; hardest bug is the first real OneDrive sync). Not done: the build log row's write-up
+> link, and `tech` on ledger drafts n89 to n93, still null.
 > `AGENTS.md` and `CLAUDE.md` (written by `next dev`) are committed, so the tree stays clean.
 > **`gh` in Shane's terminal** needed `gh repo set-default shanelabountyai/callboard` (two remotes, `origin` and
 > `template`); set 2026-10-01. Never put a `# comment` with parentheses on a command line for him: zsh reads it as a pattern.
