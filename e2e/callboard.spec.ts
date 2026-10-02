@@ -73,7 +73,7 @@ test('run of show: an .xlsx import replaces imported rows and keeps a hand-added
   await page.waitForURL(/imported=2/);
   await expect(page.getByRole('status')).toContainText('Imported 2 rows');
   await expect(page.getByText('2 imported, 1 added by hand')).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: 'Doors open' })).toContainText('08:00');
+  await expect(page.getByRole('row').filter({ hasText: 'Doors open' })).toContainText('8:00 AM');
   await expect(page.getByRole('row').filter({ hasText: 'Staff debrief' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Opening keynote' })).toHaveCount(0); // the seeded import row is gone
   await expect(page.getByLabel('Day')).toHaveCount(0); // a one-day sheet shows no days
@@ -82,7 +82,7 @@ test('run of show: an .xlsx import replaces imported rows and keeps a hand-added
   const days = writeXlsx([['Day', 'Time', 'Cue'], ['Day 1', '05:00 PM', 'Load out'], ['Day 2', '07:00 AM', 'Crew call']]);
   await page.getByLabel('File').setInputFiles({ name: 'days.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: days });
   await page.getByRole('button', { name: 'Import' }).click();
-  await expect(page.getByRole('row').filter({ hasText: 'Load out' })).toContainText('17:00');
+  await expect(page.getByRole('row').filter({ hasText: 'Load out' })).toContainText('5:00 PM');
   await expect(page.locator('tbody').filter({ hasText: 'Day 1' })).toContainText('Load out');
   await expect(page.locator('tbody').filter({ hasText: 'Day 2' })).toContainText('Crew call');
   await expect(page.locator('tbody').filter({ hasText: 'Any day' })).toContainText('Staff debrief');

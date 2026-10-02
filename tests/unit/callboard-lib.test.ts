@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { repeatsCard } from '@/lib/cards';
 import { parseCsv, pickColumn, toRecords } from '@/lib/csv';
 import { toE164 } from '@/lib/phone';
-import { fmtTime, isHm, isYmd, zonedToUtc } from '@/lib/time';
+import { fmtHm, fmtTime, isHm, isYmd, zonedToUtc } from '@/lib/time';
 import { excelTime, readXlsx } from '@/lib/xlsx';
 import { writeXlsx } from '../helpers/xlsx';
 
@@ -44,6 +44,7 @@ describe('time', () => {
     expect(isYmd('2026-13-03')).toBe(false);
     expect(isHm('23:59')).toBe(true);
     expect(isHm('24:00')).toBe(false);
+    expect(['00:15', '08:00', '12:00', '17:00', 'TBC'].map(fmtHm)).toEqual(['12:15 AM', '8:00 AM', '12:00 PM', '5:00 PM', 'TBC']);
   });
 });
 
