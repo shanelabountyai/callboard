@@ -1,6 +1,11 @@
 # NEXT
 
-## PICK UP HERE: one check left on the live sync (shipped 2026-10-02)
+## PICK UP HERE: nothing is queued (2026-10-02)
+- **The real-sheet check passed 2026-10-02** (Shane, in production, reported as passed with no detail): a time changed
+  in the real sheet moved the line on Spring Expo's run of show within the minute. The "Not confirmed" line below is closed.
+- **Next, only when asked or due**: Neon re-measure about 2026-10-08 (command in the cost review); PRD 6 P1.
+
+## Live sync shipped (2026-10-02)
 - **Shipped by Shane 2026-10-02**: `db:migrate:prod` (`db:status:prod`: up to date), PR #14 merged as `bd28b84`, deploy
   hook fired, `callboard-i2ejc33dd` Ready on production. From outside: site 401, cron 401. CI on main is green
   (run 37048101182, on `6ba6c00`, which holds the merge; the merge's own run 37047881196 was cancelled by that push).
