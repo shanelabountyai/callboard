@@ -1,12 +1,14 @@
 # NEXT
 
-## PICK UP HERE: ship the live sync and change log (built 2026-10-02 on `ros-live-sync`, waits for Shane)
-- **To ship, in this order, all Shane's**: `npm run db:migrate:prod` (one add-only migration, `20261002000000_ros_log`),
-  merge the pull request, fire the deploy hook. Then open Spring Expo's run of show in production, change a time in the
-  real sheet, and wait a minute: the line should move and "What changed" should list it. That is the one thing not tested.
+## PICK UP HERE: one check left on the live sync (shipped 2026-10-02)
+- **Shipped by Shane 2026-10-02**: `db:migrate:prod` (`db:status:prod`: up to date), PR #14 merged as `bd28b84`, deploy
+  hook fired, `callboard-i2ejc33dd` Ready on production. From outside: site 401, cron 401. CI on main was still running
+  (run 37047881196): read it with `gh run list --limit 3`.
+- **Not confirmed**: the real test. Open Spring Expo's run of show in production, change a time in the real sheet, wait a
+  minute: the line should move, carry a mark, and appear under "What changed".
 - **Nothing else is queued.** PRD 6 P1 waits until asked for; Neon re-measure about 2026-10-08.
 
-## Live sync and change log 2026-10-02 (branch `ros-live-sync`)
+## Live sync and change log 2026-10-02 (PR #14, on main and in production)
 - **Asked for and decided by Shane 2026-10-02, not to be asked again**: the page re-pulls about every 60 s while it is
   open (no cron pull, cron stays daily); the change is told by a log on the page only (no texts, nothing on phone pages).
 - **The pull** (`pullRos` in the ros `actions.ts`, called by `auto-sync.tsx`): on open and every 60 s while the tab is
