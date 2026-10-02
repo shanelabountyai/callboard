@@ -5,16 +5,18 @@ import { writeXlsx } from '../helpers/xlsx';
 
 // The live sheet's Sync fetches a link a user typed, from the server. A fake fetch stands in for Smartsheet and
 // Microsoft, and records every address asked for, so a test can say what was never fetched.
-type Reply = { status?: number; location?: string; body?: string | Buffer; length?: number };
+type Reply = { status?: number; location?: string; body?: string | Buffer; length?: number; setCookie?: string };
 function fake(replies: Record<string, Reply>) {
-  const calls: { url: string; auth: string | null }[] = [];
+  const calls: { url: string; auth: string | null; cookie: string | null; agent: string | null }[] = [];
   const f = async (url: URL, init: RequestInit) => {
-    calls.push({ url: url.href, auth: new Headers(init.headers).get('authorization') });
+    const sent = new Headers(init.headers);
+    calls.push({ url: url.href, auth: sent.get('authorization'), cookie: sent.get('cookie'), agent: sent.get('user-agent') });
     const r = replies[url.href] ?? replies[url.origin + url.pathname];
     if (!r) throw new Error(`unexpected fetch ${url.href}`);
     const headers = new Headers();
     if (r.location) headers.set('location', r.location);
     if (r.length) headers.set('content-length', String(r.length));
+    if (r.setCookie) headers.append('set-cookie', r.setCookie);
     const status = r.status ?? (r.location ? 302 : 200);
     return new Response(status >= 300 && status < 400 ? null : new Uint8Array(Buffer.from(r.body ?? '')), { status, headers });
   };
@@ -48,6 +50,20 @@ describe('sheet link', () => {
     expect(await fetchSheet(link(SHARE), { fetch: f })).toEqual([['Time', 'Cue'], ['09:15', 'Keynote']]);
     expect(calls[0]!.url).toBe(`${SHARE}&download=1`);
     expect(calls[1]!.url).toBe('https://acme.sharepoint.com/personal/pat/_layouts/15/download.aspx?UniqueId=7'); // a signed address is fetched as given
+  });
+
+  // The chain a real 1drv.ms link walked on 2026-10-01: the share hop sets a guest cookie and the file hop wants it.
+  it('walks a personal OneDrive link, returning a cookie to the host that set it and to no other', async () => {
+    const { f, calls } = fake({
+      'https://1drv.ms/x/c/abc/def': { status: 301, location: 'https://onedrive.live.com/:x:/g/personal/ABC/def?resid=ABC!s1&ithint=file%2cxlsx&download=1' },
+      'https://onedrive.live.com/:x:/g/personal/ABC/def': { location: '/personal/abc/Documents/Show.xlsx?ga=1', setCookie: 'FedAuth=guest; path=/; secure; HttpOnly' },
+      'https://onedrive.live.com/personal/abc/Documents/Show.xlsx': { location: 'https://my.microsoftpersonalcontent.com/download/7' },
+      'https://my.microsoftpersonalcontent.com/download/7': { body: workbook },
+    });
+    expect(await fetchSheet(link('https://1drv.ms/x/c/abc/def'), { fetch: f })).toEqual([['Time', 'Cue'], ['09:15', 'Keynote']]);
+    expect(calls.map((c) => c.cookie)).toEqual([null, null, 'FedAuth=guest', null]);
+    expect(calls[1]!.url).toBe('https://onedrive.live.com/:x:/g/personal/ABC/def?resid=ABC!s1&ithint=file%2cxlsx&download=1'); // not re-encoded
+    expect(calls.every((c) => c.agent?.startsWith('Mozilla/'))).toBe(true); // OneDrive blocks a client without one
   });
 
   it('never follows a redirect off the list, and names a sign-in when that is where it leads', async () => {
@@ -93,9 +109,12 @@ describe('sheet link', () => {
 describe('run of show lines', () => {
   it('matches columns by header and numbers a repeated line', () => {
     expect(rosLines([['When', 'What', 'Room'], ['0.375', 'Doors', 'Lobby'], ['09:00', 'Doors', ''], ['', '', 'x']])).toEqual([
-      { at: '09:00', cue: 'Doors', area: 'Lobby', owner: '', sortOrder: 0, sourceKey: '09:00|Doors' },
-      { at: '09:00', cue: 'Doors', area: '', owner: '', sortOrder: 1, sourceKey: '09:00|Doors#2' },
+      { day: '', at: '09:00', cue: 'Doors', area: 'Lobby', owner: '', sortOrder: 0, sourceKey: '09:00|Doors' },
+      { day: '', at: '09:00', cue: 'Doors', area: '', owner: '', sortOrder: 1, sourceKey: '09:00|Doors#2' },
     ]);
+    // the same cue on two days is two lines, not a repeat; a date cell comes as Excel's serial
+    expect(rosLines([['Day', 'Time', 'Cue'], ['Day 1', '07:00 AM', 'Doors'], ['Day 2', '07:00 AM', 'Doors']])?.map((l) => [l.day, l.at, l.sourceKey])).toEqual([['Day 1', '07:00', 'Day 1|07:00|Doors'], ['Day 2', '07:00', 'Day 2|07:00|Doors']]);
+    expect(rosLines([['Date', 'Time', 'Cue'], ['46309', '0.375', 'Doors']])?.[0]?.day).toBe('2026-10-14');
     expect(rosLines([['Name', 'Phone'], ['Tom', '555']])).toBeNull();
     expect(rosLines([])).toBeNull();
   });

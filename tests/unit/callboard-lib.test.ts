@@ -59,6 +59,9 @@ describe('xlsx', () => {
     expect(excelTime(rows[1]![0]!)).toBe('09:30');
     expect(rows[2]).toEqual(['10:15', 'Keynote <live>', 'Hall A', '']);
     expect(excelTime('7:05')).toBe('07:05');
+    // a real OneDrive sheet (2026-10-01) wrote its times as text with AM and PM
+    expect(['05:00 PM', '12:30 PM', '12:15 AM', '06:00 AM', '5pm', '9:30:00 p.m.'].map(excelTime)).toEqual(['17:00', '12:30', '00:15', '06:00', '17:00', '21:30']);
+    expect(excelTime('0.375')).toBe('09:00');
     expect(excelTime('45123.5')).toBe('12:00'); // a full datetime serial keeps its time part
     expect(excelTime('TBD')).toBe('TBD');
   });

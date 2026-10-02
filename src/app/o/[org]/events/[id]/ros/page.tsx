@@ -24,6 +24,9 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
   const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) }, select: { id: true, name: true, timezone: true, rosUrl: true, rosSyncedAt: true } });
   if (!event) notFound();
   const rows = await db.runOfShowRow.findMany({ where: { ...inOrg(ctx), eventId: id }, orderBy: [{ at: 'asc' }, { sortOrder: 'asc' }] });
+  // Days in the sheet's order; a one-day sheet has none and shows no headings. Lines with no day come first.
+  const days = [...new Set([...rows].sort((a, b) => Number(a.manual) - Number(b.manual) || a.sortOrder - b.sortOrder).map((r) => r.day).filter(Boolean))];
+  const groups = ['', ...days].map((day) => ({ day, rows: rows.filter((r) => r.day === day) })).filter((g) => g.rows.length);
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const base = `/o/${ctx.slug}/events/${event.id}`;
 
@@ -36,8 +39,10 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
       <p>{rows.filter((r) => !r.manual).length} imported, {rows.filter((r) => r.manual).length} added by hand.</p>
       <table>
         <thead><tr><th>Time</th><th>Cue</th><th>Area</th><th>Owner</th><th>Source</th><th></th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
+        {groups.map((g) => (
+        <tbody key={g.day}>
+          {days.length > 0 && <tr><th colSpan={6} scope="rowgroup">{g.day || 'Any day'}</th></tr>}
+          {g.rows.map((r) => (
             <tr key={r.id}>
               <td>{r.at}</td><td>{r.cue}</td><td>{r.area}</td><td>{r.owner}</td><td>{r.manual ? 'manual' : 'import'}</td>
               <td>
@@ -51,11 +56,13 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
             </tr>
           ))}
         </tbody>
+        ))}
       </table>
 
       <h2>Add a line</h2>
       <ActionForm action={bind(addRosRow)}>
         <input type="hidden" name="eventId" value={event.id} />
+        {days.length > 0 && <label>Day <select name="day">{days.map((d) => <option key={d}>{d}</option>)}</select></label>}
         <label>Time <input name="at" type="time" /></label>
         <label>Cue <input name="cue" required maxLength={200} placeholder="Doors open" /></label>
         <label>Area <input name="area" maxLength={80} /></label>

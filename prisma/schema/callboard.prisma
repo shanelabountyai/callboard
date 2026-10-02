@@ -262,6 +262,7 @@ model RunOfShowRow {
   sourceKey String // "time|cue" from the sheet, or "manual:<uuid>" for a hand-added line
   manual    Boolean @default(false) // hand-added here; a re-import never replaces these
   at        String // "09:30" as written in the sheet; a timeline, not a timestamp
+  day       String @default("") // "Day 2" or "2026-10-14" from the sheet's Day or Date column; "" for a one-day sheet
   cue       String
   area      String @default("")
   owner     String @default("")
