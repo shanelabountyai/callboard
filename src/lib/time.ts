@@ -24,5 +24,7 @@ export const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
 const fmt = (opts: Intl.DateTimeFormatOptions) => (d: Date, tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, ...opts }).format(d);
 export const fmtTime = fmt({ hour: 'numeric', minute: '2-digit' }); // 6:30 AM
+/** A stored "17:00" as the rest of the app writes a time: "5:00 PM". Anything else is shown as it is. */
+export const fmtHm = (hm: string) => (isHm(hm) ? `${+hm.slice(0, 2) % 12 || 12}${hm.slice(2)} ${+hm.slice(0, 2) < 12 ? 'AM' : 'PM'}` : hm);
 export const fmtWhen = fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); // Sat, Oct 3, 8:00 AM
 export const fmtDay = fmt({ weekday: 'short', month: 'short', day: 'numeric' });

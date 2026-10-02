@@ -4,7 +4,7 @@ import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
 import { COLUMNS_ERROR } from '@/lib/ros';
-import { fmtWhen } from '@/lib/time';
+import { fmtHm, fmtWhen } from '@/lib/time';
 import { addRosRow, deleteRosRow, syncRos } from './actions';
 
 export const metadata = { title: 'Run of show' };
@@ -44,7 +44,7 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
           {days.length > 0 && <tr><th colSpan={6} scope="rowgroup">{g.day || 'Any day'}</th></tr>}
           {g.rows.map((r) => (
             <tr key={r.id}>
-              <td>{r.at}</td><td>{r.cue}</td><td>{r.area}</td><td>{r.owner}</td><td>{r.manual ? 'manual' : 'import'}</td>
+              <td>{fmtHm(r.at)}</td><td>{r.cue}</td><td>{r.area}</td><td>{r.owner}</td><td>{r.manual ? 'manual' : 'import'}</td>
               <td>
                 {r.manual && (
                   <ActionForm action={bind(deleteRosRow)}>
