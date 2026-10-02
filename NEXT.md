@@ -1,5 +1,22 @@
 # NEXT
 
+## PICK UP HERE: live sync and a change log for the run of show (decided 2026-10-02, not started)
+- **Asked for by Shane 2026-10-02**: "there should be a sync feature and tell what changed log"; "the one time sync will
+  not work in a live event". Today the sheet is pulled only on the **Sync now** button and nothing records what changed.
+- **Decided by Shane 2026-10-02, not to be asked again**: the trigger is the page (the run of show page re-pulls about
+  every 60 s while it is open; no cron pull, cron stays daily); the change is told by a log on the page only (no texts,
+  nothing on phone pages); the model is **Opus 5.5** (`/model claude-opus-5-5`).
+- **Shape, lazy version**: each sync diffs the new lines against the imported rows before `replaceImported`
+  (`src/lib/ros.ts`; `syncRos` in the ros `actions.ts`) and stores added, removed, moved (same day and cue, new time) and
+  edited (same day, time and cue; area or owner differs) with the sync time. One add-only migration for the log. The
+  page lists it newest first and marks changed lines. A sync that finds nothing writes no log entry.
+- **Known limit, told to Shane**: an Excel row has no permanent id (`sourceKey` is day, time and cue), so a cue whose time
+  and wording both change reads as one removed and one added.
+- **Watch for**: the 60 s pull is a server fetch of a user-typed link on a timer, so it goes through `fetchSheet`'s
+  allowlist unchanged and must not run when the last pull is under about 50 s old (several open tabs); a failed pull
+  (sheet mid-save, Microsoft sign-in bounce) must keep the old rows and log nothing; duplicate cues at one time; the
+  file upload should write the same log. Branch off main; a merge to main is Shane's click and the deploy is his hook.
+
 > **The project is closed (2026-10-01). Nothing is queued.** Both pull requests are merged by Shane and deployed by the
 > main-manual hook: PR #3, the live sheet (`712b341`, after `npm run db:migrate:prod`, `20260929000000_ros_link`), and
 > PR #10, the closure deliverables (`0a464cb`, section below). `callboard-ltxust0x1` is Ready on production; the cron is
@@ -14,8 +31,8 @@
 > about 2026-10-08 (command in the cost review below). PRD 6 P1 waits until asked for.
 > The build log row: https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj (version 20). **Technical write-up: `WRITEUP.md`**
 > (2026-10-02, chosen by Shane over staying closed, PRD 6 P1 and a real Smartsheet test; same eight sections as the
-> storage and rental write-ups; hardest bug is the first real OneDrive sync). Not done: the build log row's write-up
-> link, and `tech` on ledger drafts n89 to n93, still null.
+> storage and rental write-ups; hardest bug is the first real OneDrive sync). The build log row has the link (version 26) and ledger drafts n89 to n93 point at its sections (version 55).
+> **PR #13 (run of show times read 5:00 PM) merged 2026-10-02 as `56400cc`**; whether Shane fired the deploy hook is not confirmed: check `vercel ls callboard`.
 > `AGENTS.md` and `CLAUDE.md` (written by `next dev`) are committed, so the tree stays clean.
 > **`gh` in Shane's terminal** needed `gh repo set-default shanelabountyai/callboard` (two remotes, `origin` and
 > `template`); set 2026-10-01. Never put a `# comment` with parentheses on a command line for him: zsh reads it as a pattern.
