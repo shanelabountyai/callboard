@@ -1,23 +1,39 @@
 # NEXT
 
-## PICK UP HERE: live sync and a change log for the run of show (decided 2026-10-02, not started)
-- **Asked for by Shane 2026-10-02**: "there should be a sync feature and tell what changed log"; "the one time sync will
-  not work in a live event". Today the sheet is pulled only on the **Sync now** button and nothing records what changed.
-- **Decided by Shane 2026-10-02, not to be asked again**: the trigger is the page (the run of show page re-pulls about
-  every 60 s while it is open; no cron pull, cron stays daily); the change is told by a log on the page only (no texts,
-  nothing on phone pages); the model is **Opus 5.5** (`/model claude-opus-5-5`).
-- **Shape, lazy version**: each sync diffs the new lines against the imported rows before `replaceImported`
-  (`src/lib/ros.ts`; `syncRos` in the ros `actions.ts`) and stores added, removed, moved (same day and cue, new time) and
-  edited (same day, time and cue; area or owner differs) with the sync time. One add-only migration for the log. The
-  page lists it newest first and marks changed lines. A sync that finds nothing writes no log entry.
-- **Known limit, told to Shane**: an Excel row has no permanent id (`sourceKey` is day, time and cue), so a cue whose time
-  and wording both change reads as one removed and one added.
-- **Watch for**: the 60 s pull is a server fetch of a user-typed link on a timer, so it goes through `fetchSheet`'s
-  allowlist unchanged and must not run when the last pull is under about 50 s old (several open tabs); a failed pull
-  (sheet mid-save, Microsoft sign-in bounce) must keep the old rows and log nothing; duplicate cues at one time; the
-  file upload should write the same log. Branch off main; a merge to main is Shane's click and the deploy is his hook.
+## PICK UP HERE: ship the live sync and change log (built 2026-10-02 on `ros-live-sync`, waits for Shane)
+- **To ship, in this order, all Shane's**: `npm run db:migrate:prod` (one add-only migration, `20261002000000_ros_log`),
+  merge the pull request, fire the deploy hook. Then open Spring Expo's run of show in production, change a time in the
+  real sheet, and wait a minute: the line should move and "What changed" should list it. That is the one thing not tested.
+- **Nothing else is queued.** PRD 6 P1 waits until asked for; Neon re-measure about 2026-10-08.
 
-> **The project is closed (2026-10-01). Nothing is queued.** Both pull requests are merged by Shane and deployed by the
+## Live sync and change log 2026-10-02 (branch `ros-live-sync`)
+- **Asked for and decided by Shane 2026-10-02, not to be asked again**: the page re-pulls about every 60 s while it is
+  open (no cron pull, cron stays daily); the change is told by a log on the page only (no texts, nothing on phone pages).
+- **The pull** (`pullRos` in the ros `actions.ts`, called by `auto-sync.tsx`): on open and every 60 s while the tab is
+  visible. It reads the saved link, never one from the request, through `parseSheetLink` and `fetchSheet` unchanged.
+  Several tabs share one pull: a claim on `Event.rosTriedAt` lets one through per 50 s. **Sync now** has no such wait.
+- **A failed pull** keeps the rows and logs nothing. `rosTriedAt` later than `rosSyncedAt` is the signal, and the page
+  says "The sheet could not be read at ... The lines above are the last good copy. Press Sync now to see why."
+- **The diff** (`diffRos` in `src/lib/ros.ts`, run inside `replaceImported`, so the file upload writes the same log):
+  same day, time and cue with a new area or owner is edited; same day and cue with a new time is moved; the rest is
+  added or removed. A repeated cue at one time is counted (`#2` in `sourceKey`). The first import and a sync that
+  changes nothing write no entry. `replaceImported` now locks the event row, so two syncs take turns.
+- **The page**: "What changed", newest first, the last 20 entries; a line changed in the last hour carries a mark
+  ("moved from 9:15 AM") in the table. One table, `RosSync` (event, time, changes as JSON).
+- **Known limit, told to Shane**: a sheet row has no permanent id, so a cue whose time and wording both change reads as
+  one removed and one added (`ponytail:` note on `diffRos`).
+- **Defaults taken, all reversible, Shane to confirm**: marks last one hour; the log shows 20 entries and is never
+  trimmed; an automatic pull is written to the audit log only when it changed something; the pull also runs once when
+  the page opens; a sheet that comes back with a header and no rows logs every line as removed.
+- Skipped (add when asked): a pause button, the pull on the board or phone pages, a filter on the log, trimming it.
+- Gate: lint, typecheck, `foundation:drift` clean; vitest 214 of 214 (3 new in `tests/integration/callboard-ros.test.ts`);
+  e2e, the run of show spec alone, 1 of 1 against a production build, with the log and the mark asserted.
+- Checked once by hand, not committed: in a browser, with a link nobody shares, the timer mounted, the pull ran on
+  open, the failure message showed and the rows stayed.
+- Not checked: a pull that succeeds in a browser against a real sheet (the ship step above), Smartsheet, the page on a
+  phone, a second tab.
+
+> **The project is closed (2026-10-01).** Both pull requests are merged by Shane and deployed by the
 > main-manual hook: PR #3, the live sheet (`712b341`, after `npm run db:migrate:prod`, `20260929000000_ros_link`), and
 > PR #10, the closure deliverables (`0a464cb`, section below). `callboard-ltxust0x1` is Ready on production; the cron is
 > once a day (`0 13 * * *`; restore `*/5 * * * *` the week before any real event). CI on main after PR #3 passed (run

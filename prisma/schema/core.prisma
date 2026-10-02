@@ -103,6 +103,7 @@ model Org {
   areaReviews    AreaReview[] // app
   playbooks      Playbook[] // app
   swaps          Swap[] // app
+  rosSyncs       RosSync[] // app
   orgRules       OrgRules? // app
 }
 

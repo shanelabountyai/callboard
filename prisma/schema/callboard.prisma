@@ -90,6 +90,7 @@ model Event {
   // The live run of show (PRD 1): a Smartsheet, OneDrive or SharePoint link, pulled by Sync on the run of show page.
   rosUrl        String         @default("")
   rosSyncedAt   DateTime?      @db.Timestamptz(6)
+  rosTriedAt    DateTime?      @db.Timestamptz(6) // the last pull attempt; later than rosSyncedAt means that pull failed
   createdAt     DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
   days          EventDay[]
@@ -100,6 +101,7 @@ model Event {
   assignments   Assignment[]
   links         PersonLink[]
   runOfShow     RunOfShowRow[]
+  rosSyncs      RosSync[]
   alerts        Alert[]
   broadcasts    Broadcast[]
   reviews       Review[]
@@ -269,6 +271,19 @@ model RunOfShowRow {
   sortOrder Int
 
   @@unique([eventId, sourceKey])
+}
+
+// What one sync or import changed in the run of show (diffRos in src/lib/ros.ts). A sync that changed nothing writes no row.
+model RosSync {
+  id      String   @id @default(uuid()) @db.Uuid
+  orgId   String   @db.Uuid
+  org     Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventId String   @db.Uuid
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  at      DateTime @db.Timestamptz(6)
+  changes Json // RosChange[]
+
+  @@index([eventId, at])
 }
 
 enum AlertKind {
