@@ -1,4 +1,5 @@
 import { inOrg, type OrgCtx } from '@/core/authz/guards';
+import { now } from '@/core/clock';
 import type { Prisma } from '@/generated/prisma/client';
 import { pickColumn, toRecords } from './csv';
 import { excelTime } from './xlsx';
@@ -40,7 +41,44 @@ export function rosLines(rows: string[][]): RosLine[] | null {
     });
 }
 
+type Line = Pick<RosLine, 'day' | 'at' | 'cue' | 'area' | 'owner' | 'sourceKey'>;
+/** One line of the change log. `sourceKey` is the line as it is now (none for a removed one); `was` is a moved line's old time. */
+export type RosChange = { kind: 'added' | 'removed' | 'moved' | 'edited'; day: string; at: string; cue: string; sourceKey?: string; was?: string; note?: string };
+
+/**
+ * What a sync changed. A line is the same line when its day, time and cue match (sourceKey): then a new area or
+ * owner is an edit. A line with a new time and the same day and cue has moved. Anything else is added or removed.
+ * ponytail: a sheet row has no permanent id, so a cue whose time and wording both change reads as one removed and
+ * one added; match on Smartsheet's row id if that ever matters.
+ */
+export function diffRos(old: Line[], lines: Line[]): RosChange[] {
+  const before = new Map(old.map((o) => [o.sourceKey, o]));
+  const kept = new Set(lines.map((l) => l.sourceKey));
+  const gone = old.filter((o) => !kept.has(o.sourceKey));
+  const note = (o: Line, l: Line) => (['area', 'owner'] as const).filter((f) => o[f] !== l[f]).map((f) => `${f} ${o[f] || 'none'} → ${l[f] || 'none'}`).join(', ');
+  const out: RosChange[] = [];
+  for (const l of lines) {
+    const line = { day: l.day, at: l.at, cue: l.cue, sourceKey: l.sourceKey };
+    const same = before.get(l.sourceKey);
+    if (same) {
+      if (note(same, l)) out.push({ kind: 'edited', ...line, note: note(same, l) });
+      continue;
+    }
+    const i = gone.findIndex((g) => g.day === l.day && g.cue === l.cue);
+    const from = i < 0 ? null : gone.splice(i, 1)[0]!;
+    out.push(from ? { kind: 'moved', ...line, was: from.at, ...(note(from, l) && { note: note(from, l) }) } : { kind: 'added', ...line });
+  }
+  return [...out, ...gone.map((g) => ({ kind: 'removed' as const, day: g.day, at: g.at, cue: g.cue }))];
+}
+
+/** Replaces the imported rows and logs what changed. The first import, and one that changes nothing, log nothing. */
 export async function replaceImported(tx: Prisma.TransactionClient, ctx: OrgCtx, eventId: string, lines: RosLine[]) {
+  // Two syncs of one event take turns: side by side, both would delete the old rows and both insert the new ones.
+  await tx.$queryRaw`SELECT 1 FROM "Event" WHERE "id" = ${eventId}::uuid AND "orgId" = ${ctx.orgId}::uuid FOR UPDATE`;
+  const old = await tx.runOfShowRow.findMany({ where: { ...inOrg(ctx), eventId, manual: false }, orderBy: { sortOrder: 'asc' } });
+  const changes = old.length ? diffRos(old, lines) : [];
   await tx.runOfShowRow.deleteMany({ where: { ...inOrg(ctx), eventId, manual: false } });
   await tx.runOfShowRow.createMany({ data: lines.map((l) => ({ ...inOrg(ctx), eventId, manual: false, ...l })) });
+  if (changes.length) await tx.rosSync.create({ data: { ...inOrg(ctx), eventId, at: now(), changes } });
+  return changes.length;
 }

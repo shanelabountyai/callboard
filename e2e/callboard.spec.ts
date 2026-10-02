@@ -77,6 +77,9 @@ test('run of show: an .xlsx import replaces imported rows and keeps a hand-added
   await expect(page.getByRole('row').filter({ hasText: 'Staff debrief' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Opening keynote' })).toHaveCount(0); // the seeded import row is gone
   await expect(page.getByLabel('Day')).toHaveCount(0); // a one-day sheet shows no days
+  // What changed: the import is diffed against the rows it replaces, logged, and the changed lines are marked.
+  await expect(page.getByRole('listitem').filter({ hasText: 'Opening keynote' })).toContainText('removed');
+  await expect(page.getByRole('row').filter({ hasText: 'Keynote' }).locator('mark')).toHaveText('added');
 
   // A sheet with a Day column is grouped by day in the sheet's order, and a PM time is the afternoon.
   const days = writeXlsx([['Day', 'Time', 'Cue'], ['Day 1', '05:00 PM', 'Load out'], ['Day 2', '07:00 AM', 'Crew call']]);

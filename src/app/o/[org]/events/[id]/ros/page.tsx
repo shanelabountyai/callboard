@@ -3,9 +3,11 @@ import { notFound } from 'next/navigation';
 import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { ActionForm } from '@/core/ui/action-form';
-import { COLUMNS_ERROR } from '@/lib/ros';
+import { now } from '@/core/clock';
+import { COLUMNS_ERROR, type RosChange } from '@/lib/ros';
 import { fmtHm, fmtWhen } from '@/lib/time';
-import { addRosRow, deleteRosRow, syncRos } from './actions';
+import { addRosRow, deleteRosRow, pullRos, syncRos } from './actions';
+import { AutoSync } from './auto-sync';
 
 export const metadata = { title: 'Run of show' };
 
@@ -21,12 +23,17 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
   const ctx = await requireOrg((await params).org);
   const { id } = await params;
   const q = await searchParams;
-  const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) }, select: { id: true, name: true, timezone: true, rosUrl: true, rosSyncedAt: true } });
+  const event = await db.event.findFirst({ where: { id, ...inOrg(ctx) }, select: { id: true, name: true, timezone: true, rosUrl: true, rosSyncedAt: true, rosTriedAt: true } });
   if (!event) notFound();
   const rows = await db.runOfShowRow.findMany({ where: { ...inOrg(ctx), eventId: id }, orderBy: [{ at: 'asc' }, { sortOrder: 'asc' }] });
   // Days in the sheet's order; a one-day sheet has none and shows no headings. Lines with no day come first.
   const days = [...new Set([...rows].sort((a, b) => Number(a.manual) - Number(b.manual) || a.sortOrder - b.sortOrder).map((r) => r.day).filter(Boolean))];
   const groups = ['', ...days].map((day) => ({ day, rows: rows.filter((r) => r.day === day) })).filter((g) => g.rows.length);
+  // The change log, newest first. A line changed in the last hour is marked where it sits in the table.
+  const log = (await db.rosSync.findMany({ where: { ...inOrg(ctx), eventId: id }, orderBy: { at: 'desc' }, take: 20 })).map((s) => ({ ...s, changes: s.changes as RosChange[] }));
+  const told = (c: RosChange) => `${c.kind === 'moved' ? `moved from ${fmtHm(c.was ?? '') || 'no time'}` : c.kind}${c.note ? `: ${c.note}` : ''}`;
+  const marks = new Map(log.filter((s) => s.at.getTime() > now().getTime() - 3_600_000).reverse().flatMap((s) => s.changes.map((c) => [c.sourceKey, told(c)] as const)));
+  const failed = event.rosUrl && event.rosTriedAt && (!event.rosSyncedAt || event.rosTriedAt > event.rosSyncedAt);
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
   const base = `/o/${ctx.slug}/events/${event.id}`;
 
@@ -44,7 +51,7 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
           {days.length > 0 && <tr><th colSpan={6} scope="rowgroup">{g.day || 'Any day'}</th></tr>}
           {g.rows.map((r) => (
             <tr key={r.id}>
-              <td>{fmtHm(r.at)}</td><td>{r.cue}</td><td>{r.area}</td><td>{r.owner}</td><td>{r.manual ? 'manual' : 'import'}</td>
+              <td>{fmtHm(r.at)}</td><td>{r.cue}{!r.manual && marks.has(r.sourceKey) && <> <mark>{marks.get(r.sourceKey)}</mark></>}</td><td>{r.area}</td><td>{r.owner}</td><td>{r.manual ? 'manual' : 'import'}</td>
               <td>
                 {r.manual && (
                   <ActionForm action={bind(deleteRosRow)}>
@@ -71,13 +78,23 @@ export default async function RunOfShow({ params, searchParams }: { params: Prom
       </ActionForm>
 
       <h2>Live sheet</h2>
-      <p>Paste the link to the run of show in Smartsheet, or to an Excel workbook on OneDrive or SharePoint shared with &quot;Anyone with the link can view&quot;. Sync pulls the sheet as it is now: it replaces the imported rows and keeps the ones added by hand. Clear the link and sync to disconnect.</p>
-      {event.rosSyncedAt && <p>Last synced {fmtWhen(event.rosSyncedAt, event.timezone)}.</p>}
+      <p>Paste the link to the run of show in Smartsheet, or to an Excel workbook on OneDrive or SharePoint shared with &quot;Anyone with the link can view&quot;. Sync pulls the sheet as it is now, and this page pulls it again about once a minute while it is open: each pull replaces the imported rows and keeps the ones added by hand. Clear the link and sync to disconnect.</p>
+      {event.rosSyncedAt && <p>Last synced {fmtWhen(event.rosSyncedAt, event.timezone)}. {event.rosUrl && <AutoSync pull={pullRos.bind(null, ctx.slug, { eventId: event.id })} />}</p>}
+      {failed && <p role="alert">The sheet could not be read at {fmtWhen(event.rosTriedAt!, event.timezone)}. The lines above are the last good copy. Press Sync now to see why.</p>}
       <ActionForm action={bind(syncRos)}>
         <input type="hidden" name="eventId" value={event.id} />
         <label>Sheet link <input name="url" type="url" maxLength={500} defaultValue={event.rosUrl} placeholder="https://app.smartsheet.com/sheets/..." /></label>
         <button type="submit">{event.rosUrl ? 'Sync now' : 'Link and sync'}</button>
       </ActionForm>
+
+      <h2>What changed</h2>
+      {log.length === 0 && <p>Nothing yet. Each sync or import that changes a line is listed here, newest first.</p>}
+      {log.map((s) => (
+        <section key={s.id}>
+          <h3>{fmtWhen(s.at, event.timezone)}</h3>
+          <ul>{s.changes.map((c, i) => <li key={i}>{[c.day, fmtHm(c.at), c.cue].filter(Boolean).join(', ')}: {told(c)}</li>)}</ul>
+        </section>
+      ))}
 
       <h2>Import a file</h2>
       <p>Upload the sheet as .xlsx, or a .csv export from Smartsheet. The header row needs a time and a cue column; area and owner are optional. Re-importing replaces the imported rows and keeps the ones added by hand.</p>
