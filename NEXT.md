@@ -6,9 +6,11 @@
 > once a day (`0 13 * * *`; restore `*/5 * * * *` the week before any real event). CI on main after PR #3 passed (run
 > 36889818823). Checked from outside only: the site and the cron answer 401 without their secrets.
 > **Open, when wanted**: `SMARTSHEET_TOKEN` was skipped (`vercel env add SMARTSHEET_TOKEN production`, then the deploy
-> hook); Excel, OneDrive and SharePoint links work without it, a Smartsheet link says "not connected". **A real personal OneDrive
-> sheet syncs locally as of 2026-10-01 (PR #11, branch `first-real-sync`, section below); production runs the broken
-> code until that is merged and deployed.** Still untested: SharePoint, Smartsheet. Re-measure Neon compute
+> hook); Excel, OneDrive and SharePoint links work without it, a Smartsheet link says "not connected". **PR #11, the first real sheet
+> sync, shipped 2026-10-02** (section below): `db:migrate:prod`, merged by Shane as `e5d7112`, CI on main green (run
+> 37025748566), deployed by the hook as `callboard-ay2iekya8` (built from `e5d7112`). Checked from outside only: 401,
+> cron 401, SMS webhook 405. **Not done: a Sync of the real sheet in production.** Still untested: SharePoint, Smartsheet.
+> The session cannot fire the deploy hook (refused as a production deploy); Shane runs the `curl` on `77057d2`'s address. Re-measure Neon compute
 > about 2026-10-08 (command in the cost review below). PRD 6 P1 waits until asked for.
 > The build log row: https://claude.ai/artifact/28KeGV3xfBwcBuoMEQjFMj (version 20). No technical write-up exists.
 > `AGENTS.md` and `CLAUDE.md` (written by `next dev`) are committed, so the tree stays clean.
@@ -43,7 +45,7 @@
 > `ref()` or `notRef()` (FR-06, FR-08), or the invariant test fails. Foundation today: `v1.2.0`, on main.
 > **Every item:** run `gh run list --limit 3` before starting and after pushing. CI runs on main and on pull requests only.
 
-## First real sheet sync 2026-10-01 (branch `first-real-sync`, not merged)
+## First real sheet sync 2026-10-01 (PR #11, on main and in production 2026-10-02)
 - **Decided by Shane 2026-10-01**: test the live sheet against a real link (over the technical write-up, PRD 6 P1, or
   staying closed). Not to be asked again.
 - **The sheet**: Shane's personal OneDrive link (`1drv.ms/x/c/...`), "Multi_Day_Conference_Run_of_Show 1.xlsx", 52 lines
@@ -65,7 +67,7 @@
   it. A one-day sheet has no headings. Hand-added lines pick a day from the ones the sheet has; a line with none sits
   first, under "Any day". The same cue at the same time on two days is two lines (`sourceKey` carries the day).
 - **One migration, `20261001000000_ros_day`**: it only adds. Applied to both local databases with `migrate deploy`.
-  **Production needs `npm run db:migrate:prod` before the merge**, then the deploy hook.
+  Production got it on 2026-10-02, before the merge (`db:status:prod`: up to date).
 - Skipped (add when asked): a day on a hand-added line when the sheet has none, a filter to one day, today's day first.
 - Gate: lint and typecheck clean; vitest 211 of 211 (the AM and PM cases, the OneDrive chain, the day cases); e2e, the run
   of show spec alone, 1 of 1 against a production build, with the multi-day import added. The full e2e sweep is CI's.
