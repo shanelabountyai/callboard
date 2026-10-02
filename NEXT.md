@@ -3,6 +3,8 @@
 ## PICK UP HERE: nothing is queued (2026-10-02)
 - **The real-sheet check passed 2026-10-02** (Shane, in production, reported as passed with no detail): a time changed
   in the real sheet moved the line on Spring Expo's run of show within the minute. The "Not confirmed" line below is closed.
+- **Decided by Shane 2026-10-02**: stay closed (over PRD 6 P1, a real Smartsheet test, or an early Neon re-measure).
+  On a bare `go` before 2026-10-08, say so and do not ask again.
 - **Next, only when asked or due**: Neon re-measure about 2026-10-08 (command in the cost review); PRD 6 P1.
 
 ## Live sync shipped (2026-10-02)
