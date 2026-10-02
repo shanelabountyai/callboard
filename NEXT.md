@@ -2,8 +2,8 @@
 
 ## PICK UP HERE: one check left on the live sync (shipped 2026-10-02)
 - **Shipped by Shane 2026-10-02**: `db:migrate:prod` (`db:status:prod`: up to date), PR #14 merged as `bd28b84`, deploy
-  hook fired, `callboard-i2ejc33dd` Ready on production. From outside: site 401, cron 401. CI on main was still running
-  (run 37047881196): read it with `gh run list --limit 3`.
+  hook fired, `callboard-i2ejc33dd` Ready on production. From outside: site 401, cron 401. CI on main is green
+  (run 37048101182, on `6ba6c00`, which holds the merge; the merge's own run 37047881196 was cancelled by that push).
 - **Not confirmed**: the real test. Open Spring Expo's run of show in production, change a time in the real sheet, wait a
   minute: the line should move, carry a mark, and appear under "What changed".
 - **Nothing else is queued.** PRD 6 P1 waits until asked for; Neon re-measure about 2026-10-08.
