@@ -152,6 +152,7 @@
 
   Baseline to check against: Vercel $0.27 for September; Neon compute 0 at the window's start, expected well under
   180 CU-hours for October once the daily cron is deployed.
+  **Re-measure 2026-10-13:** Neon `callboard`: `compute_time_seconds` 16584 (4.6 CU-h), `active_time_seconds` 63148 (17.5 h in about 12 days, roughly 11 CU-h/month projected against the 180 CU-h at the 5-minute cron). `suspend_timeout_seconds` still 0 (default). Vercel 2026-09-13 to 2026-10-13: callboard $0.36 (96 build minutes $0.34). The daily cron is working; no change.
 - Gate on this branch: lint and typecheck clean; `scripts/links.ts` ran against the local database (12 links, 3 leads).
   No test changed; no migration.
 
