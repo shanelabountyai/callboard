@@ -1,5 +1,11 @@
 # NEXT
 
+## Foundation v1.3.0 awaiting merge (2026-10-19)
+- Upgrade from v1.2.0 to v1.3.0 (with v1.2.1, both `security:`, due 2026-10-21) is on branch `foundation-v1.3.0`, in a PR
+  awaiting Shane's merge. After merge: `npm run db:migrate:prod` (`20261014000000_role_scorekeeper`), deploy hook, then update
+  Callboard's row in the template's `CLONES.md`. Behaviour change: demo visitors can no longer invite, manage members,
+  create an org, use billing or delete anything (v1.2.1).
+
 ## PICK UP HERE: nothing is queued (2026-10-02)
 - **The real-sheet check passed 2026-10-02** (Shane, in production, reported as passed with no detail): a time changed
   in the real sheet moved the line on Spring Expo's run of show within the minute. The "Not confirmed" line below is closed.
