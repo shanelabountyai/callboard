@@ -38,6 +38,13 @@ export const linkExpiry = (shiftEnd: Date) => new Date(shiftEnd.getTime() + 7 * 
 /** Overbook cap: invites allowed on a shift, needed × (1 + overbook%). */
 export const inviteCap = (shift: { needed: number; overbookPct: number }) => Math.ceil(shift.needed * (1 + shift.overbookPct / 100));
 
+/**
+ * A person can no longer say "Can't make it" once they have checked in or the shift is over: a decline never counts in
+ * the reliability record (review.ts), so a decline after the fact would erase a worked shift or a no-show. The route
+ * also refuses once a no-show alert has been raised, which is the same rule a release follows (REVIEWABLE).
+ */
+export const declineLocked = (a: { checkedInAt: Date | null; shift: { endAt: Date } }, t: Date) => !!a.checkedInAt || a.shift.endAt.getTime() <= t.getTime();
+
 /** An assignment that holds the person's time. A decline or a release does not. */
 export const OPEN: AssignmentStatus[] = ['invited', 'confirmed'];
 export const overlapping = (s: { startAt: Date; endAt: Date }) => ({ startAt: { lt: s.endAt }, endAt: { gt: s.startAt } });
