@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { audit } from '@/core/audit';
 import type { OrgCtx } from '@/core/authz/guards';
 import { now } from '@/core/clock';
@@ -17,6 +18,8 @@ const OPEN = { in: ['invited', 'confirmed'] as Prisma.EnumAssignmentStatusFilter
 export async function resolveAudience(orgId: string, eventId: string, audience: string): Promise<{ label: string; people: { id: string; name: string; mobile: string; email: string | null; smsOptOut: boolean }[] }> {
   const t = now();
   const [kind, id] = audience.split(':') as [string, string | undefined];
+  // An id-less or malformed id must not reach Prisma: `undefined` drops the filter, which would mean the whole event.
+  if (['aor', 'area', 'shift', 'person'].includes(kind) && !z.uuid().safeParse(id).success) throw new Refused('That audience no longer exists.');
   const base: Prisma.AssignmentWhereInput = { orgId, eventId, status: OPEN };
   let where: Prisma.AssignmentWhereInput;
   let label: string;

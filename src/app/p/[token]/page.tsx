@@ -10,7 +10,7 @@ import { aor as stripe } from '@/lib/colors';
 import { dueAt, EARLY_MS, HELP_CATEGORIES, isOverdue } from '@/lib/dayof';
 import { readPersonLink } from '@/lib/links';
 import { PlaybookView } from '@/lib/playbook-view';
-import { assignmentInclude, firstName } from '@/lib/staffing';
+import { assignmentInclude, declineLocked, firstName } from '@/lib/staffing';
 import { isLive, OPEN_SWAP, SWAP_SAYS, swapInclude, swappable, type SwapSays } from '@/lib/swaps';
 import { fmtDay, fmtTime, fmtWhen, ymd } from '@/lib/time';
 import { Taps } from './taps';
@@ -28,6 +28,7 @@ const DONE: Record<string, string> = {
   confirm: 'Thanks, you are confirmed. See you there.',
   decline: 'Noted. Your lead has been told, and the shift is open for someone else.',
   clash: 'You have another shift at that time, so this one was not confirmed. Decline the other first, or ask your lead.',
+  locked: 'That shift has started or is over, so it can no longer be declined here. Talk to your lead.',
   checkin: 'You are checked in.',
   checkout: 'You are checked out. Thanks for today.',
   help: 'Your lead has been told and will come to you.',
@@ -158,7 +159,7 @@ export default async function PersonPage({ params, searchParams }: { params: Pro
               <form method="post" action={`/p/${token}/respond`} className="pair">
                 <input type="hidden" name="assignment" value={a.id} />
                 <button type="submit" name="answer" value="confirm" disabled={a.status === 'confirmed'} className="primary">Confirm</button>
-                <button type="submit" name="answer" value="decline" disabled={a.status === 'declined'}>Can’t make it</button>
+                {!declineLocked(a, t) && <button type="submit" name="answer" value="decline" disabled={a.status === 'declined'}>Can’t make it</button>}
               </form>
             )}
             {(card || notes) && (
