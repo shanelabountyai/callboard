@@ -17,7 +17,8 @@ export function zonedToUtc(ymd: string, hm: string, tz: string): Date {
   return new Date(guess - (parts(new Date(guess), tz) - guess));
 }
 
-export const isYmd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+/** A real calendar day. Date.parse alone takes "2026-02-30" and rolls it into March, so the day must read back the same. */
+export const isYmd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s;
 export const isHm = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 /** A @db.Date column comes back as UTC midnight; this is the day it names. */
 export const ymd = (d: Date) => d.toISOString().slice(0, 10);
