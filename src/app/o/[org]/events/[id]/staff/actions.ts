@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { audit } from '@/core/audit';
-import { orgAction, ref } from '@/core/authz/action';
+import { ref } from '@/core/authz/action';
 import { inOrg, type OrgCtx } from '@/core/authz/guards';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
@@ -13,6 +13,7 @@ import { must } from '@/lib/refuse';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { assignmentInclude, clashSays, describeAssignment, findClash, inviteCap, linkExpiry, OPEN } from '@/lib/staffing';
 import { decideSwap as decide, SWAP_SAYS, swapDone } from '@/lib/swaps';
+import { plannerAction } from '@/lib/planner';
 
 // Assignments and invites (PRD 3). Inviting is sending: the assignment row and its message commit together,
 // then the outbox is drained right away so a planner's sends do not wait for the hourly cron.
@@ -24,7 +25,7 @@ const daysOut = (callAt: Date) => {
 };
 
 /** People come as checkboxes named `p:<personId>`, so the form can list the whole directory. */
-export const invite = orgAction(null, z.looseObject({ shiftId: ref('shift') }), async (ctx, i) => {
+export const invite = plannerAction(z.looseObject({ shiftId: ref('shift') }), async (ctx, i) => {
   const shift = must(await db.shift.findFirst({ where: { id: i.shiftId, ...inOrg(ctx) }, include: { assignments: true, event: { select: { isTemplate: true } } } }));
   if (shift.event.isTemplate) throw new Refused('A template is never staffed. Start an event from it instead.');
   const personIds = Object.keys(i).filter((k) => k.startsWith('p:')).map((k) => k.slice(2)).filter((id) => z.uuid().safeParse(id).success);
@@ -55,7 +56,7 @@ export const invite = orgAction(null, z.looseObject({ shiftId: ref('shift') }), 
 });
 
 /** One reminder to everyone still unconfirmed on the event, with the sender's name on it. */
-export const nudgeUnconfirmed = orgAction(null, z.object({ eventId: ref('event') }), async (ctx, { eventId }) => {
+export const nudgeUnconfirmed = plannerAction(z.object({ eventId: ref('event') }), async (ctx, { eventId }) => {
   must(await db.event.findFirst({ where: { id: eventId, ...inOrg(ctx) }, select: { id: true } }));
   const pending = await db.assignment.findMany({ where: { ...inOrg(ctx), eventId, status: 'invited', shift: { callAt: { gt: now() } } }, include: assignmentInclude });
   await db.$transaction(async (tx) => {
@@ -70,8 +71,7 @@ export const nudgeUnconfirmed = orgAction(null, z.object({ eventId: ref('event')
 });
 
 /** Planner override: confirm on someone's behalf, mark a decline, or release them (they are told). */
-export const setAssignmentStatus = orgAction(
-  null,
+export const setAssignmentStatus = plannerAction(
   z.object({ id: ref('assignment'), status: z.enum(['invited', 'confirmed', 'declined', 'released']) }),
   async (ctx, i) => {
     const a = must(await db.assignment.findFirst({ where: { id: i.id, ...inOrg(ctx) }, include: assignmentInclude }));
@@ -92,7 +92,7 @@ export const setAssignmentStatus = orgAction(
 );
 
 /** The planner's word on a swap both people have agreed to (PRD 3). A lead does the same from their own page. */
-export const decideSwap = orgAction(null, z.object({ id: ref('swap'), decision: z.enum(['approve', 'refuse']) }), async (ctx, i) => {
+export const decideSwap = plannerAction(z.object({ id: ref('swap'), decision: z.enum(['approve', 'refuse']) }), async (ctx, i) => {
   const s = must(await db.swap.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { eventId: true } }));
   const r = await decide({ name: 'the planner' }, ctx, { orgId: ctx.orgId }, i.id, i.decision === 'approve');
   await drainOutbox(5);

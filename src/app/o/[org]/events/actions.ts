@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { audit } from '@/core/audit';
-import { orgAction, ref } from '@/core/authz/action';
+import { ref } from '@/core/authz/action';
 import { inOrg, type OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
@@ -10,6 +10,7 @@ import { must } from '@/lib/refuse';
 import { pickRules, standardOf } from '@/lib/rules';
 import { copyEvent } from '@/lib/templates';
 import { isYmd } from '@/lib/time';
+import { plannerAction } from '@/lib/planner';
 
 const eventPage = (ctx: OrgCtx, id: string) => `/o/${ctx.slug}/events/${id}`;
 const DAY = 86_400_000;
@@ -33,8 +34,7 @@ function daysBetween(from: string, to: string): Date[] {
   return Array.from({ length: (b - a) / DAY + 1 }, (_, i) => new Date(a + i * DAY));
 }
 
-export const createEvent = orgAction(
-  null,
+export const createEvent = plannerAction(
   z.object({
     name: z.string().trim().min(1, 'Give the event a name.').max(120),
     venue: z.string().trim().max(200).default(''),
@@ -57,8 +57,7 @@ export const createEvent = orgAction(
  * Start a new event from another event (PRD 1): the structure comes across with
  * every date shifted; assignments do not. See copyEvent.
  */
-export const duplicateEvent = orgAction(
-  null,
+export const duplicateEvent = plannerAction(
   z.object({ id: ref('event'), name: z.string().trim().min(1, 'Give the new event a name.').max(120), startsOn: z.string().trim().min(1, 'Start date is required.') }),
   async (ctx, i) => {
     must(await db.event.findFirst({ where: { id: i.id, ...inOrg(ctx) }, select: { id: true } }));
