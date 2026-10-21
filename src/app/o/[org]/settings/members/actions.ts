@@ -5,11 +5,11 @@ import { orgAction, ref } from '@/core/authz/action';
 import type { OrgCtx } from '@/core/authz/guards';
 import { createInvite, revokeInvite } from '@/core/tenancy/invites';
 import { changeRole, removeMember } from '@/core/tenancy/orgs';
-import { Role } from '@/generated/prisma/enums';
+import { PLANNER_ROLES } from '@/lib/planner';
 
 // Thin calls into core/tenancy (D-12), where the role rules (D-11) and the last-owner rule live.
 const back = (ctx: OrgCtx) => redirect(`/o/${ctx.slug}/settings/members`);
-const role = z.enum(Role);
+const role = z.enum(PLANNER_ROLES); // Callboard D-001: scorekeeper is not assignable here
 
 export const inviteMember = orgAction('members.manage', z.object({ email: z.string(), role }), async (ctx, i) => {
   await createInvite(ctx, i.email, i.role);

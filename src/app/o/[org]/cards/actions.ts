@@ -2,13 +2,14 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { audit } from '@/core/audit';
-import { orgAction, ref } from '@/core/authz/action';
+import { ref } from '@/core/authz/action';
 import { inOrg, type OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
 import { cardLines, slug } from '@/lib/cards';
 import { must, onUnique } from '@/lib/refuse';
 import { startDue } from '@/lib/stages';
+import { plannerAction } from '@/lib/planner';
 
 // The position card library (PRD 6). Any planner in the org can edit; every save is a new version with
 // their name on it, and nothing is ever edited in place.
@@ -33,7 +34,7 @@ const clean = (i: Fields) => ({
 });
 const TAKEN = 'Someone saved this card a moment ago. Reload to see their change, then make yours on top of it.';
 
-export const createCard = orgAction(null, z.object(fields), async (ctx, i) => {
+export const createCard = plannerAction(z.object(fields), async (ctx, i) => {
   const key = slug(i.title);
   if (!key) throw new Refused('Use letters or numbers in the title.');
   const card = await db.positionCard
@@ -48,7 +49,7 @@ export const createCard = orgAction(null, z.object(fields), async (ctx, i) => {
  * else saved first and this one is refused rather than silently winning (versions are linear).
  * Events not yet live move to the new version; a live or closed event keeps the one it ran with.
  */
-export const saveCard = orgAction(null, z.object({ id: ref('positionCard'), ...fields }), async (ctx, { id, ...i }) => {
+export const saveCard = plannerAction(z.object({ id: ref('positionCard'), ...fields }), async (ctx, { id, ...i }) => {
   const base = must(await db.positionCard.findFirst({ where: { id, ...inOrg(ctx) } }));
   const latest = await db.positionCard.findFirstOrThrow({ where: { ...inOrg(ctx), key: base.key }, orderBy: { version: 'desc' } });
   if (latest.id !== base.id) throw new Refused(`Version ${latest.version} was saved while you were editing. Reload to see that change, then make yours on top of it.`);

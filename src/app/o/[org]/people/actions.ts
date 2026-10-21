@@ -3,19 +3,19 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { audit } from '@/core/audit';
-import { orgAction, ref } from '@/core/authz/action';
+import { ref } from '@/core/authz/action';
 import { inOrg, notFoundOnP2025, type OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
 import { parseCsv, pickColumn, toRecords } from '@/lib/csv';
 import { toE164 } from '@/lib/phone';
 import { onUnique } from '@/lib/refuse';
+import { plannerAction } from '@/lib/planner';
 
 const page = (ctx: OrgCtx) => `/o/${ctx.slug}/people`;
 const kindOf = (s: string) => (/^(emp|staff)/i.test(s) ? 'employee' : 'volunteer') as 'employee' | 'volunteer';
 
-export const addPerson = orgAction(
-  null,
+export const addPerson = plannerAction(
   z.object({
     name: z.string().trim().min(1, 'Name is required.').max(120),
     mobile: z.string().trim().min(1, 'Mobile is required.').max(30),
@@ -35,7 +35,7 @@ export const addPerson = orgAction(
 );
 
 /** Paste a CSV with a header row: name, mobile (or phone), email, kind (employee/volunteer), department. Existing mobiles are updated. */
-export const importPeople = orgAction(null, z.object({ csv: z.string().min(1, 'Paste CSV rows with a header line.') }), async (ctx, { csv }) => {
+export const importPeople = plannerAction(z.object({ csv: z.string().min(1, 'Paste CSV rows with a header line.') }), async (ctx, { csv }) => {
   const rows = toRecords(parseCsv(csv));
   const first = rows[0];
   if (!first) throw new Refused('No rows found under the header line.');
@@ -72,14 +72,14 @@ export const importPeople = orgAction(null, z.object({ csv: z.string().min(1, 'P
   return { notice: `Imported ${created} new, updated ${updated}.${skipped.length ? ` Skipped (no name or bad mobile): ${skipped.join(', ')}.` : ''}` };
 });
 
-export const deletePerson = orgAction(null, z.object({ id: ref('person') }), async (ctx, { id }) => {
+export const deletePerson = plannerAction(z.object({ id: ref('person') }), async (ctx, { id }) => {
   await db.person.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
   await audit(ctx, 'person.deleted', { targetType: 'person', targetId: id });
   redirect(page(ctx));
 });
 
 /** A planner's override of the computed tier (PRD 3), with the reason kept beside it. Blank returns to history. */
-export const setTier = orgAction(null, z.object({ id: ref('person'), tier: z.enum(['', '1', '2', '3']), note: z.string().trim().max(200).default('') }), async (ctx, i) => {
+export const setTier = plannerAction(z.object({ id: ref('person'), tier: z.enum(['', '1', '2', '3']), note: z.string().trim().max(200).default('') }), async (ctx, i) => {
   if (i.tier && !i.note) throw new Refused('Say why, so the next planner knows it was set by hand.');
   await db.person.update({ where: { id: i.id, ...inOrg(ctx) }, data: { tierOverride: i.tier ? Number(i.tier) : null, tierNote: i.tier ? i.note : '' } }).catch(notFoundOnP2025);
   await audit(ctx, 'person.tier_set', { targetType: 'person', targetId: i.id, data: { tier: i.tier || null } });

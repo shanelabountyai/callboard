@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { audit } from '@/core/audit';
-import { orgAction, ref } from '@/core/authz/action';
+import { ref } from '@/core/authz/action';
 import { inOrg, notFoundOnP2025, type OrgCtx } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
@@ -17,6 +17,7 @@ import { ruleShapeOptional } from '@/lib/rules';
 import { startDue } from '@/lib/stages';
 import { drainOutbox } from '@/modules/notifications/outbox';
 import { isHm, ymd, zonedToUtc } from '@/lib/time';
+import { plannerAction } from '@/lib/planner';
 
 // The event's structure (PRD 1, PRD 2): locations (areas) with a lead, roles (positions) and shifts.
 const page = (ctx: OrgCtx, eventId: string) => `/o/${ctx.slug}/events/${eventId}`;
@@ -24,7 +25,7 @@ const optionalRef = (model: string) => z.union([ref(model), z.literal('')]);
 const int = (min: number, msg: string) => z.coerce.number().int().min(min, msg);
 
 // The planner opens an event for staffing (or reopens a closed one) and closes it. Running is automatic: `startDue`.
-export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.enum(['staffing', 'closed']) }), async (ctx, i) => {
+export const setStatus = plannerAction(z.object({ id: ref('event'), status: z.enum(['staffing', 'closed']) }), async (ctx, i) => {
   const event = must(await db.event.findFirst({ where: { id: i.id, ...inOrg(ctx) } }));
   // The first close starts the review (PRD 6): leads get their link. Reopening and closing again does not text them twice.
   if (event.isTemplate) throw new Refused('A template is never staffed or run. Start an event from it instead.');
@@ -41,8 +42,7 @@ export const setStatus = orgAction(null, z.object({ id: ref('event'), status: z.
 });
 
 /** This event's own rules (PRD 6) and its emergency contact. A rule left out of the form stays as it is. */
-export const setEventDefaults = orgAction(
-  null,
+export const setEventDefaults = plannerAction(
   z.object({ id: ref('event'), ...ruleShapeOptional(), emergencyContact: z.string().trim().max(200).optional() }),
   async (ctx, { id, ...data }) => {
     await db.event.update({ where: { id, ...inOrg(ctx) }, data }).catch(notFoundOnP2025);
@@ -106,8 +106,7 @@ const same = (name: string) => ({ equals: name, mode: 'insensitive' as const });
  * case). One day or every day. Arrive-early minutes and extra invites come from the event's defaults, and a
  * new role takes the job description of the same name. A lead left blank leaves the location's lead alone.
  */
-export const addShift = orgAction(
-  null,
+export const addShift = plannerAction(
   z.object({
     eventId: ref('event'),
     location: z.string().trim().min(1, 'Say where, such as Registration.').max(80),
@@ -148,8 +147,7 @@ export const addShift = orgAction(
 const text = (max: number) => z.string().trim().max(max).optional();
 
 /** One Save per location. A field left out of the form stays as it is; deputy and radio belong to the lead's team. */
-export const saveLocation = orgAction(
-  null,
+export const saveLocation = plannerAction(
   z.object({
     id: ref('area'),
     name: z.string().trim().min(1, 'Name the location.').max(80).optional(),
@@ -180,8 +178,7 @@ export const saveLocation = orgAction(
 );
 
 /** One Save per role. A field left out of the form stays as it is; the job description lands on its latest version. */
-export const saveRole = orgAction(
-  null,
+export const saveRole = plannerAction(
   z.object({
     id: ref('position'),
     name: z.string().trim().min(1, 'Name the role.').max(80).optional(),
@@ -206,8 +203,7 @@ export const saveRole = orgAction(
 );
 
 /** One Save per shift. Arrive-early minutes move the call time, which every no-show rule keys off. */
-export const saveShift = orgAction(
-  null,
+export const saveShift = plannerAction(
   z.object({ id: ref('shift'), needed: int(1, 'How many must be at least 1.').optional(), callOffsetMin: int(0, 'Minutes cannot be negative.').optional(), overbookPct: int(0, 'Extra invites cannot be negative.').optional() }),
   async (ctx, { id, callOffsetMin, ...rest }) => {
     const s = must(await db.shift.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, startAt: true } }));
@@ -219,7 +215,7 @@ export const saveShift = orgAction(
 // Deletes only show in edit mode, behind a confirmation, so each one lands back in edit mode.
 const editing = (ctx: OrgCtx, eventId: string) => `${page(ctx, eventId)}?edit=1`;
 
-export const deleteArea = orgAction(null, z.object({ id: ref('area') }), async (ctx, { id }) => {
+export const deleteArea = plannerAction(z.object({ id: ref('area') }), async (ctx, { id }) => {
   const area = must(await db.area.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, aorId: true, _count: { select: { positions: true } } } }));
   if (area._count.positions) throw new Refused('Delete the location’s roles first.');
   await db.area.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
@@ -227,14 +223,14 @@ export const deleteArea = orgAction(null, z.object({ id: ref('area') }), async (
   redirect(editing(ctx, area.eventId));
 });
 
-export const deletePosition = orgAction(null, z.object({ id: ref('position') }), async (ctx, { id }) => {
+export const deletePosition = plannerAction(z.object({ id: ref('position') }), async (ctx, { id }) => {
   const p = must(await db.position.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, _count: { select: { shifts: true } } } }));
   if (p._count.shifts) throw new Refused('Delete the role’s shifts first.');
   await db.position.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
   redirect(editing(ctx, p.eventId));
 });
 
-export const deleteShift = orgAction(null, z.object({ id: ref('shift') }), async (ctx, { id }) => {
+export const deleteShift = plannerAction(z.object({ id: ref('shift') }), async (ctx, { id }) => {
   const s = must(await db.shift.findFirst({ where: { id, ...inOrg(ctx) }, select: { eventId: true, _count: { select: { assignments: true } } } }));
   if (s._count.assignments) throw new Refused('Release the people on this shift first (Staff page).');
   await db.shift.delete({ where: { id, ...inOrg(ctx) } }).catch(notFoundOnP2025);
