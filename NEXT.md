@@ -14,6 +14,9 @@
   (cloud `DATABASE_URL` in `.env.local`), `npm run build:test` passes. e2e left to CI. `npm audit --omit=dev` no longer
   lists `next`; `deepmerge-ts` (high) and `fast-uri` (moderate) are listed and predate this merge.
 - Open PRs #16 and #17 touch no file this merge changes.
+- 2026-11-04: v1.4.1 (`security:`, critical RCE in Image Optimization) added to the same branch: next 16.4.0 -> 16.4.5, zod 4.6.7,
+  prisma 7.10.1; lockfile regenerated. `npm audit --omit=dev` 0 vulnerabilities; vitest 264/264, `build:test` passes.
+  Redeploy as soon as it merges.
 
 ## Foundation v1.3.0 shipped (verified 2026-10-23)
 - PR #15 merged 2026-10-19 (`c1bf606`). Production deploy from `main` 2026-10-19 14:34; `db:status:prod` reports
