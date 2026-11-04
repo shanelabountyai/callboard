@@ -1,5 +1,20 @@
 # NEXT
 
+## Foundation v1.4.0 awaiting merge (2026-11-04)
+- Upgrade from v1.3.0 to v1.4.0 (with v1.3.1, `security:`, next 16.3.6 -> 16.3.8, due 2026-10-27, late) is on branch
+  `foundation-v1.4.0`, in a PR awaiting Shane's merge. No migration, no new env var: after merge, the deploy hook, then
+  update Callboard's row in the template's `CLONES.md`.
+- Conflicts: `CLONES.md`, `NEXT.md` (template-only docs, kept callboard's); `package.json` (kept `next` ^16.4.0 over the
+  template's ^16.3.8, took `eslint-config-next` ^16.3.8); `package-lock.json` (kept callboard's, `npm install` moved only
+  `eslint-config-next` and `@next/eslint-plugin-next` to 16.4.5; `next` stays 16.4.0).
+- `filterListedOrgs` in `src/app/org-hooks.ts` keeps the template default (`return orgs`): callboard hides no orgs.
+  `/demo` and `/onboarding` were not customised, so they merged clean. `/o/[org]/projects` still exists, so
+  `review-2026-10-12-demo-projects.test.ts` is kept.
+- Gate: typecheck, lint, `foundation:drift` clean against v1.4.0; vitest 264 of 264; `npm run build` refused by INV-18
+  (cloud `DATABASE_URL` in `.env.local`), `npm run build:test` passes. e2e left to CI. `npm audit --omit=dev` no longer
+  lists `next`; `deepmerge-ts` (high) and `fast-uri` (moderate) are listed and predate this merge.
+- Open PRs #16 and #17 touch no file this merge changes.
+
 ## Foundation v1.3.0 shipped (verified 2026-10-23)
 - PR #15 merged 2026-10-19 (`c1bf606`). Production deploy from `main` 2026-10-19 14:34; `db:status:prod` reports
   17 migrations, up to date (includes `20261014000000_role_scorekeeper`). `CLONES.md` row reads v1.3.0.
