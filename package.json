@@ -32,6 +32,7 @@
     "seed:callboard:test": "dotenv -e .env.test -e .env.local -- tsx scripts/seed-callboard.ts",
     "links": "dotenv -e .env.local -- tsx scripts/links.ts",
     "db:setup": "tsx scripts/db-setup.ts",
+    "rls:policies": "tsx scripts/rls-policies.ts",
     "new-project": "tsx scripts/new-project.ts",
     "foundation:drift": "tsx scripts/foundation-drift.ts",
     "foundation:status": "tsx scripts/foundation-status.ts",
@@ -41,6 +42,7 @@
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "next": "^16.4.5",
+    "openid-client": "6.8.8",
     "otpauth": "^9.5.2",
     "pg": "^8.23.0",
     "qrcode-generator": "^2.0.4",
@@ -61,6 +63,6 @@
     "prisma": "^7.10.1",
     "tsx": "^4.23.13",
     "typescript": "^5.6",
-    "vitest": "^2.1"
+    "vitest": "^5.1.0"
   }
 }
