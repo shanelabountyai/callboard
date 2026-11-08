@@ -1,5 +1,25 @@
 # NEXT
 
+## Foundation v1.6.0 (with v1.5.0) 2026-11-07, branch `foundation-v1.6.0`
+- v1.4.1 -> v1.6.0. v1.5.0: vitest 2.1 -> 5.1 (dev only). v1.6.0: opt-in RLS, `sso` and `apikeys` modules (kept), audit
+  log viewer, security pages, per-org export, AI spend guards. Runtime unchanged with nothing set.
+- Ten template migrations plus `20261108000003_rls_policies_callboard` (`npm run rls:policies`, 39 tables, named to sort
+  after the newest template migration). Production needs `npm run db:migrate:prod` after the merge (Shane).
+- RLS stays off: no `RLS_ENFORCE` repo variable, no `RLS_MODE`. `removeMember`/`deleteAccount` call sites already pass
+  `onMembershipEnded` (merged cleanly). `@/lib/messages` still registers the templates before the cron drain.
+- **D-1 (2026-11-07): the export holds every Callboard table whole except `PersonLink`.** `src/app/export-hooks.ts` lists
+  the 19 other org-owned tables with all columns: none is sealed, hashed or a token, and every column is already shown
+  to planners in the app (Person mobile/email like core's Membership email; `Event.rosUrl` is the sheet link the
+  planner pasted). `PersonLink` is the per-person magic-link table (token hash + expiry): a credential table, skipped
+  whole in `exportSkipped`. Alternative considered: column-by-column selects; rejected as no column needs dropping.
+- Pre-existing e2e fix (2026-11-07): the day-of test now shifts every Spring Expo day by one delta, not day 1 alone, so the
+  library test's duplicate keeps two consecutive days (it had failed on main since 2026-11-05).
+- `Org.events OrgEvent[]` (template) clashed with Callboard's `Org.events Event[]`: the template's is renamed
+  `orgEvents` (relation name only), listed in `FOUNDATION_PATCHES.md`; upstream should rename it.
+- `e2e/security-pages.spec.ts` adapted: Callboard's settings links are in a second nav row under Settings.
+- Gate: typecheck, lint, drift clean against v1.6.0; vitest 341 passed, 41 skipped (INV-29..33, RLS enforce only);
+  `build:test` green; `npm audit --omit=dev` 0.
+
 ## Foundation v1.4.0 awaiting merge (2026-11-04)
 - Upgrade from v1.3.0 to v1.4.0 (with v1.3.1, `security:`, next 16.3.6 -> 16.3.8, due 2026-10-27, late) is on branch
   `foundation-v1.4.0`, in a PR awaiting Shane's merge. No migration, no new env var: after merge, the deploy hook, then

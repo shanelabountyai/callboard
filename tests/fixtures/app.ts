@@ -4,6 +4,7 @@ import { hashToken } from '@/core/tokens';
 
 // CLONE-OWNED. The INV-01..04 harness seeds these rows in both fixture orgs, so it can drive
 // actions whose inputs use ref('<model>') for Callboard's tables. One row of each, owned by `org`.
+// INV-29 (RLS enforce) calls it too, so every org-owned clone table has rows to scope.
 export async function seedApp(org: { orgId: string; userId: string }, key: 'a' | 'b'): Promise<Record<string, string>> {
   const n = key === 'a' ? 300 : 400;
   const ID = (k: number) => `00000000-0000-4000-8000-${String(n + k).padStart(12, '0')}`;

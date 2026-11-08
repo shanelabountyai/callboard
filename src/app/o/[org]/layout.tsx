@@ -24,8 +24,12 @@ export default async function OrgLayout({ children, params }: { children: React.
           <>
             <Link href={`${base}/rules`}>Event defaults</Link>
             <Link href={`${base}/settings/members`}>Members</Link>
+            {can(ctx.role, 'audit.read') && <Link href={`${base}/settings/audit`}>Audit log</Link>}
+            {can(ctx.role, 'audit.read') && <Link href={`${base}/settings/security`}>Security</Link>}
             {can(ctx.role, 'billing.manage') && <Link href={`${base}/settings/billing`}>Billing</Link>} {/* billing */}
-            {can(ctx.role, 'org.delete') && <Link href={`${base}/settings/danger`}>Delete org</Link>}
+            {ctx.role === 'owner' && <Link href={`${base}/settings/sso`}>SSO</Link>} {/* sso */}
+            {can(ctx.role, 'apikeys.manage') && <Link href={`${base}/settings/apikeys`}>API keys</Link>} {/* apikeys */}
+            {can(ctx.role, 'org.delete') && <Link href={`${base}/settings/danger`}>Export or delete</Link>}
           </>
         }
       />
