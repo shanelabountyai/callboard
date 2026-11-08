@@ -12,6 +12,8 @@
   to planners in the app (Person mobile/email like core's Membership email; `Event.rosUrl` is the sheet link the
   planner pasted). `PersonLink` is the per-person magic-link table (token hash + expiry): a credential table, skipped
   whole in `exportSkipped`. Alternative considered: column-by-column selects; rejected as no column needs dropping.
+- Pre-existing e2e fix (2026-11-07): the day-of test now shifts every Spring Expo day by one delta, not day 1 alone, so the
+  library test's duplicate keeps two consecutive days (it had failed on main since 2026-11-05).
 - `Org.events OrgEvent[]` (template) clashed with Callboard's `Org.events Event[]`: the template's is renamed
   `orgEvents` (relation name only), listed in `FOUNDATION_PATCHES.md`; upstream should rename it.
 - `e2e/security-pages.spec.ts` adapted: Callboard's settings links are in a second nav row under Settings.
