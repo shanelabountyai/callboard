@@ -5,4 +5,3 @@ Each one moves upstream at the next release; the excuse stops matching once the 
 
 - `src/core/ui/action-form.tsx` `edb0678ba028` — design pass 2026-09-26: the fieldset reset moved from an inline style to `globals.css`, so no inline styles remain in `src/`.
 - `src/proxy.ts` `ab3583508221` — demo gate 2026-09-28: the deployed demo sits behind a shared password (`DEMO_ACCESS_PASSWORD`, logic in `src/lib/demo-gate.ts`). The template ships no proxy; a gate for demo deployments belongs upstream.
-- `prisma/schema/core.prisma` `5497d5d49d68` — v1.6.0 merge 2026-11-07: the template's `Org.events OrgEvent[]` back-relation is renamed `orgEvents`, because Callboard already owns `Org.events Event[]` (the relation name only; no column, no migration). Upstream fix: name it `orgEvents` in the template.
