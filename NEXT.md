@@ -1,5 +1,8 @@
 # NEXT
 
+## Foundation v1.6.1 2026-11-09, branch `foundation-v1.6.1`
+- `cross-org.ts` now marks the billing/notifications entries (callboard keeps both modules; nothing deleted); `foundation:status` matches only leading `security:`. No migration, no env change. Not deployed (manual hook).
+
 ## Foundation v1.6.0 (with v1.5.0) 2026-11-07, branch `foundation-v1.6.0`
 - v1.4.1 -> v1.6.0. v1.5.0: vitest 2.1 -> 5.1 (dev only). v1.6.0: opt-in RLS, `sso` and `apikeys` modules (kept), audit
   log viewer, security pages, per-org export, AI spend guards. Runtime unchanged with nothing set.
