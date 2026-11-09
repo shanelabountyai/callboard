@@ -1,5 +1,11 @@
 # NEXT
 
+## Foundation v1.6.2 2026-11-09, branch `foundation-v1.6.2`
+- v1.6.1 -> v1.6.2. F-06: core's relation is now `Org.orgEvents` upstream, so the local rename patch row is gone from
+  `FOUNDATION_PATCHES.md` (Callboard's own `Org.events Event[]` is untouched). F-08: e2e seeds via `npm run seed:demo:test`
+  and finds the nav by its "Audit log" link; the second-row Settings click stays. Seed CLI block is only `seedDemo()`.
+  No migration, no env change. Deploy hook is manual: Shane redeploys after merge.
+
 ## Foundation v1.6.1 2026-11-09, branch `foundation-v1.6.1`
 - `cross-org.ts` now marks the billing/notifications entries (callboard keeps both modules; nothing deleted); `foundation:status` matches only leading `security:`. No migration, no env change. Not deployed (manual hook).
 
