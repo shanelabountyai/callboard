@@ -39,3 +39,7 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
   await db.broadcast.create({ data: { id: ids.broadcast, orgId, eventId: ids.event, audience: 'Whole event', body: 'Doors at 9', requiresAck: true, recipients: { create: { orgId, personId: ids.person } } } });
   return ids;
 }
+
+// CLONE-OWNED. The clone's models with no orgId column, i.e. outside tenancy and RLS on purpose (INV-42, v1.7.0). Name
+// each one with a comment saying why; a model without orgId that is not here (or in core's list) fails INV-42.
+export const GLOBAL_MODELS: readonly string[] = [];
