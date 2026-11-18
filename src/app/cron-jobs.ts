@@ -4,7 +4,7 @@ import { runDayOf } from '@/lib/dayof';
 import { runReminders } from '@/lib/reminders';
 import { runReviewAsks } from '@/lib/review';
 import { startDue } from '@/lib/stages';
-import { sweepSsoStates } from '@/modules/sso/hooks'; // sso
+import { recheckSsoDomains, sweepSsoStates } from '@/modules/sso/hooks'; // sso
 import { cronWebhooks } from '@/modules/apikeys/webhooks'; // apikeys
 
 // Clone-owned (plan §3.2): /api/cron calls this after its own core sweeps. A clone adds its jobs here,
@@ -17,6 +17,7 @@ export async function cronJobs(): Promise<Record<string, unknown>> {
   jobs.reviews = await runReviewAsks();
   jobs.outbox = { ...(await drainOutbox()), swept: await sweepOutbox() }; // notifications
   jobs.ssoStates = await sweepSsoStates(); // sso
+  jobs.ssoDomains = await recheckSsoDomains(); // sso
   jobs.webhooks = await cronWebhooks(); // apikeys
   return jobs;
 }
