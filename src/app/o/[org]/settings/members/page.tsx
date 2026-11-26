@@ -3,7 +3,7 @@ import { can, mayAssign } from '@/core/authz/permissions';
 import { now } from '@/core/clock';
 import { withOrg } from '@/core/db/rls';
 import { ActionForm } from '@/core/ui/action-form';
-import { Role } from '@/generated/prisma/enums';
+import { PLANNER_ROLES } from '@/lib/planner';
 import { cancelInvite, inviteMember, leaveOrg, removeFromOrg, setRole } from './actions';
 
 export const metadata = { title: 'Members' };
@@ -16,7 +16,7 @@ export default async function Members({ params }: { params: Promise<{ org: strin
     tx.membership.findMany({ where: inOrg(ctx), select: { userId: true, role: true, user: { select: { email: true } } }, orderBy: { createdAt: 'asc' } }),
     manage ? tx.invite.findMany({ where: { ...inOrg(ctx), acceptedAt: null, revokedAt: null, expiresAt: { gt: now() } }, orderBy: { createdAt: 'asc' } }) : [],
   ]), { atomic: false });
-  const roles = Object.values(Role);
+  const roles = PLANNER_ROLES; // Callboard D-2 (NEXT.md): scorekeeper is not assignable here
   const bind = <A extends unknown[], R>(fn: (slug: string, ...a: A) => R) => fn.bind(null, ctx.slug);
 
   return (
