@@ -65,7 +65,9 @@ Messages: without Twilio keys every SMS and email is captured in `CapturedMessag
 
 - `src/core/`: env, db, auth, tenancy, authz, audit, tokens, email, share links, cron. Never imports from `src/modules` or `src/app` (lint-enforced).
 - `src/modules/{billing,notifications}/`: optional, deletable.
-- `src/app/`: routes. `src/app/cron-jobs.ts` is where a clone adds its own cron work.
+- `src/app/`: routes. `src/app/cron-jobs.ts` is where a clone adds its own cron work. `src/app/org-hooks.ts` holds the
+  clone's org hooks: `beforeOrgDelete` (runs before an org is deleted; throwing stops it) and `filterListedOrgs` (which of a
+  user's orgs `/onboarding` and `/demo` list; default all, and it can only hide, never add — D-22).
 - `prisma/schema/`: `core.prisma` plus one file per module. A clone's tables get their own file and migrations.
 - `tests/invariants/`: the security rules as tests. `tests/fixtures/app.ts` holds a clone's harness rows.
 
@@ -74,8 +76,11 @@ Messages: without Twilio keys every SMS and email is captured in `CapturedMessag
 Delete the paths listed for it in `scripts/foundation-modules.ts`, and the lines marked `// billing` or `// notifications`
 (`{/* billing */}` in `layout.tsx`) in `prisma/schema/core.prisma`, `src/app/cron-jobs.ts` and `src/app/o/[org]/layout.tsx` —
 that includes the module's nav link, so it goes with the rest.
-`foundation:check-modules` does exactly this in a scratch copy and requires validate, typecheck, build and drift to pass.
-The module's tables stay in the migration history; drop them with a clone migration if you want them gone.
+`foundation:check-modules` does exactly this in a scratch copy (`removeModule()` in `scripts/foundation-modules.ts`) and
+requires validate, typecheck, the module-tooling unit tests, build and drift to pass.
+The module's tables stay in the migration history; drop them with a clone migration if you want them gone. Date that
+migration after the template's newest migration: the RLS policy migrations up to `20261108000002` `ALTER` module tables
+unguarded. Policy migrations from 1.6.2 on skip a module table that no longer exists.
 
 If your own code imports a module outside the marked lines (a clone's own routes or lib files, not just
 `cron-jobs.ts`/`org-hooks.ts`), list it in `src/app/required-modules.ts`. `check-modules` leaves a required module in

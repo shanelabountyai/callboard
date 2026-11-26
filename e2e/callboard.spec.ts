@@ -105,7 +105,8 @@ test('day of: board shows overdue, self check-in and lead tap check-in land on t
   await db.query(`
     UPDATE "Shift" s SET "callAt" = now() - interval '30 minutes', "startAt" = now() + interval '15 minutes', "endAt" = now() + interval '4 hours'
     FROM "EventDay" d, "Event" e WHERE s."dayId" = d.id AND d."eventId" = e.id AND e.name = 'Spring Expo' AND d.date = (SELECT min(date) FROM "EventDay" WHERE "eventId" = e.id)`);
-  await db.query(`UPDATE "EventDay" d SET date = (now() AT TIME ZONE 'America/Chicago')::date FROM "Event" e WHERE d."eventId" = e.id AND e.name = 'Spring Expo' AND d.date = (SELECT min(date) FROM "EventDay" WHERE "eventId" = e.id)`);
+  // Every day moves by the same delta, so the expo stays two consecutive days (the library test duplicates it).
+  await db.query(`UPDATE "EventDay" d SET date = d.date + ((now() AT TIME ZONE 'America/Chicago')::date - (SELECT min(date) FROM "EventDay" WHERE "eventId" = e.id)::date) FROM "Event" e WHERE d."eventId" = e.id AND e.name = 'Spring Expo'`);
   await db.query(`UPDATE "Event" SET status = 'live' WHERE name = 'Spring Expo'`);
   const { rows: [tom] } = await db.query(`SELECT id, "orgId" FROM "Person" WHERE mobile = '+15550100006'`);
   const { rows: [event] } = await db.query(`SELECT id FROM "Event" WHERE name = 'Spring Expo'`);

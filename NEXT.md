@@ -1,10 +1,57 @@
 # NEXT
 
-## Foundation v1.3.0 awaiting merge (2026-10-19)
-- Upgrade from v1.2.0 to v1.3.0 (with v1.2.1, both `security:`, due 2026-10-21) is on branch `foundation-v1.3.0`, in a PR
-  awaiting Shane's merge. After merge: `npm run db:migrate:prod` (`20261014000000_role_scorekeeper`), deploy hook, then update
-  Callboard's row in the template's `CLONES.md`. Behaviour change: demo visitors can no longer invite, manage members,
-  create an org, use billing or delete anything (v1.2.1).
+## Foundation v1.6.2 2026-11-09, branch `foundation-v1.6.2`
+- v1.6.1 -> v1.6.2. F-06: core's relation is now `Org.orgEvents` upstream, so the local rename patch row is gone from
+  `FOUNDATION_PATCHES.md` (Callboard's own `Org.events Event[]` is untouched). F-08: e2e seeds via `npm run seed:demo:test`
+  and finds the nav by its "Audit log" link; the second-row Settings click stays. Seed CLI block is only `seedDemo()`.
+  No migration, no env change. Deploy hook is manual: Shane redeploys after merge.
+
+## Foundation v1.6.1 2026-11-09, branch `foundation-v1.6.1`
+- `cross-org.ts` now marks the billing/notifications entries (callboard keeps both modules; nothing deleted); `foundation:status` matches only leading `security:`. No migration, no env change. Not deployed (manual hook).
+
+## Foundation v1.6.0 (with v1.5.0) 2026-11-07, branch `foundation-v1.6.0`
+- v1.4.1 -> v1.6.0. v1.5.0: vitest 2.1 -> 5.1 (dev only). v1.6.0: opt-in RLS, `sso` and `apikeys` modules (kept), audit
+  log viewer, security pages, per-org export, AI spend guards. Runtime unchanged with nothing set.
+- Ten template migrations plus `20261108000003_rls_policies_callboard` (`npm run rls:policies`, 39 tables, named to sort
+  after the newest template migration). Production needs `npm run db:migrate:prod` after the merge (Shane).
+- RLS stays off: no `RLS_ENFORCE` repo variable, no `RLS_MODE`. `removeMember`/`deleteAccount` call sites already pass
+  `onMembershipEnded` (merged cleanly). `@/lib/messages` still registers the templates before the cron drain.
+- **D-1 (2026-11-07): the export holds every Callboard table whole except `PersonLink`.** `src/app/export-hooks.ts` lists
+  the 19 other org-owned tables with all columns: none is sealed, hashed or a token, and every column is already shown
+  to planners in the app (Person mobile/email like core's Membership email; `Event.rosUrl` is the sheet link the
+  planner pasted). `PersonLink` is the per-person magic-link table (token hash + expiry): a credential table, skipped
+  whole in `exportSkipped`. Alternative considered: column-by-column selects; rejected as no column needs dropping.
+- Pre-existing e2e fix (2026-11-07): the day-of test now shifts every Spring Expo day by one delta, not day 1 alone, so the
+  library test's duplicate keeps two consecutive days (it had failed on main since 2026-11-05).
+- `Org.events OrgEvent[]` (template) clashed with Callboard's `Org.events Event[]`: the template's is renamed
+  `orgEvents` (relation name only), listed in `FOUNDATION_PATCHES.md`; upstream should rename it.
+- `e2e/security-pages.spec.ts` adapted: Callboard's settings links are in a second nav row under Settings.
+- Gate: typecheck, lint, drift clean against v1.6.0; vitest 341 passed, 41 skipped (INV-29..33, RLS enforce only);
+  `build:test` green; `npm audit --omit=dev` 0.
+
+## Foundation v1.4.0 awaiting merge (2026-11-04)
+- Upgrade from v1.3.0 to v1.4.0 (with v1.3.1, `security:`, next 16.3.6 -> 16.3.8, due 2026-10-27, late) is on branch
+  `foundation-v1.4.0`, in a PR awaiting Shane's merge. No migration, no new env var: after merge, the deploy hook, then
+  update Callboard's row in the template's `CLONES.md`.
+- Conflicts: `CLONES.md`, `NEXT.md` (template-only docs, kept callboard's); `package.json` (kept `next` ^16.4.0 over the
+  template's ^16.3.8, took `eslint-config-next` ^16.3.8); `package-lock.json` (kept callboard's, `npm install` moved only
+  `eslint-config-next` and `@next/eslint-plugin-next` to 16.4.5; `next` stays 16.4.0).
+- `filterListedOrgs` in `src/app/org-hooks.ts` keeps the template default (`return orgs`): callboard hides no orgs.
+  `/demo` and `/onboarding` were not customised, so they merged clean. `/o/[org]/projects` still exists, so
+  `review-2026-10-12-demo-projects.test.ts` is kept.
+- Gate: typecheck, lint, `foundation:drift` clean against v1.4.0; vitest 264 of 264; `npm run build` refused by INV-18
+  (cloud `DATABASE_URL` in `.env.local`), `npm run build:test` passes. e2e left to CI. `npm audit --omit=dev` no longer
+  lists `next`; `deepmerge-ts` (high) and `fast-uri` (moderate) are listed and predate this merge.
+- Open PRs #16 and #17 touch no file this merge changes.
+- 2026-11-04: v1.4.1 (`security:`, critical RCE in Image Optimization) added to the same branch: next 16.4.0 -> 16.4.5, zod 4.6.7,
+  prisma 7.10.1; lockfile regenerated. `npm audit --omit=dev` 0 vulnerabilities; vitest 264/264, `build:test` passes.
+  Redeploy as soon as it merges.
+
+## Foundation v1.3.0 shipped (verified 2026-10-23)
+- PR #15 merged 2026-10-19 (`c1bf606`). Production deploy from `main` 2026-10-19 14:34; `db:status:prod` reports
+  17 migrations, up to date (includes `20261014000000_role_scorekeeper`). `CLONES.md` row reads v1.3.0.
+  Behaviour change in production: demo visitors can no longer invite, manage members, create an org, use billing or
+  delete anything (v1.2.1).
 
 ## PICK UP HERE: nothing is queued (2026-10-02)
 - **The real-sheet check passed 2026-10-02** (Shane, in production, reported as passed with no detail): a time changed

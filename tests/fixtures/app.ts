@@ -4,6 +4,7 @@ import { hashToken } from '@/core/tokens';
 
 // CLONE-OWNED. The INV-01..04 harness seeds these rows in both fixture orgs, so it can drive
 // actions whose inputs use ref('<model>') for Callboard's tables. One row of each, owned by `org`.
+// INV-29 (RLS enforce) calls it too, so every org-owned clone table has rows to scope.
 export async function seedApp(org: { orgId: string; userId: string }, key: 'a' | 'b'): Promise<Record<string, string>> {
   const n = key === 'a' ? 300 : 400;
   const ID = (k: number) => `00000000-0000-4000-8000-${String(n + k).padStart(12, '0')}`;
@@ -38,3 +39,7 @@ export async function seedApp(org: { orgId: string; userId: string }, key: 'a' |
   await db.broadcast.create({ data: { id: ids.broadcast, orgId, eventId: ids.event, audience: 'Whole event', body: 'Doors at 9', requiresAck: true, recipients: { create: { orgId, personId: ids.person } } } });
   return ids;
 }
+
+// CLONE-OWNED. The clone's models with no orgId column, i.e. outside tenancy and RLS on purpose (INV-42, v1.7.0). Name
+// each one with a comment saying why; a model without orgId that is not here (or in core's list) fails INV-42.
+export const GLOBAL_MODELS: readonly string[] = [];
