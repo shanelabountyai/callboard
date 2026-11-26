@@ -14,7 +14,7 @@ import { discover, generate } from '../invariants/harness';
 
 beforeEach(resetAuthTables);
 
-// D-001: Callboard's planner surface admits owner, admin and member only. A scorekeeper (core D-21) has no
+// D-2 (NEXT.md): Callboard's planner surface admits owner, admin and member only. A scorekeeper (core D-21) has no
 // results to keep here, so it is refused everything but leaving the org.
 type Action = ((slug: string, input: unknown) => Promise<unknown>) & { spec: ActionSpec };
 
@@ -31,7 +31,7 @@ async function seeded() {
   return { org, owner, refs };
 }
 
-describe('a scorekeeper in Callboard (D-001)', () => {
+describe('a scorekeeper in Callboard (D-2)', () => {
   it('is refused every planner action, and nothing is written', async () => {
     const planner = (await discover('src/app/o/**/actions.ts')).filter(({ fn, name }) => {
       const spec = (fn as Action).spec;
@@ -91,7 +91,7 @@ function options(node: ReactNode): string[] {
   return type === 'option' ? [String(props.children)] : options(props.children);
 }
 
-describe('the members page and actions do not assign scorekeeper (D-001)', () => {
+describe('the members page and actions do not assign scorekeeper (D-2)', () => {
   it.each(['owner', 'admin'] as const)('the %s sees no scorekeeper in either role picker', async (role) => {
     const org = await makeOrg();
     const actor = await addMember(org.id, role, `${role}@example.test`);

@@ -1,5 +1,14 @@
 # NEXT
 
+## Planner gate 2026-11-26, branch `security/planner-gate-2026-11-26` (replaces PR #17)
+- **D-2 (2026-11-26): the planner surface is an allow-list, `PLANNER_ROLES` = owner, admin, member** (`src/lib/planner.ts`).
+  Foundation v1.3.0's `scorekeeper` (core D-21, `results.write` only) has no results to keep in Callboard, so it is
+  refused every planner write: all 36 `orgAction(null, …)` planner actions are now `plannerAction(…)`, the run-of-show
+  upload route calls `assertPlanner(await requireOrg(…))`, and the members page and actions offer and accept only
+  `PLANNER_ROLES` (two template-owned files, listed in `FOUNDATION_PATCHES.md`). `leaveOrg` stays open. Reads still
+  render for any member. Alternative considered: a `planner` permission in core; rejected, core is template-owned.
+- Not checked: production for existing scorekeeper memberships or pending scorekeeper invites (Shane).
+
 ## Foundation v1.6.2 2026-11-09, branch `foundation-v1.6.2`
 - v1.6.1 -> v1.6.2. F-06: core's relation is now `Org.orgEvents` upstream, so the local rename patch row is gone from
   `FOUNDATION_PATCHES.md` (Callboard's own `Org.events Event[]` is untouched). F-08: e2e seeds via `npm run seed:demo:test`
