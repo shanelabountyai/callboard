@@ -3,6 +3,7 @@ import { inOrg, requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { isSameOrigin } from '@/core/http';
 import { parseCsv } from '@/lib/csv';
+import { assertPlanner } from '@/lib/planner';
 import { replaceImported, rosLines } from '@/lib/ros';
 import { readXlsx } from '@/lib/xlsx';
 
@@ -11,7 +12,7 @@ import { readXlsx } from '@/lib/xlsx';
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export async function POST(req: Request, { params }: { params: Promise<{ org: string; id: string }> }) {
-  const ctx = await requireOrg((await params).org);
+  const ctx = assertPlanner(await requireOrg((await params).org));
   const { id } = await params;
   const back = (q: string) => Response.redirect(new URL(`/o/${ctx.slug}/events/${id}/ros?${q}`, req.url), 303);
   if (!isSameOrigin(req.headers)) return new Response(null, { status: 403 });

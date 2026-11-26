@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { audit } from '@/core/audit';
-import { orgAction, ref } from '@/core/authz/action';
+import { ref } from '@/core/authz/action';
 import { inOrg, type OrgCtx } from '@/core/authz/guards';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
@@ -13,17 +13,18 @@ import { notify } from '@/lib/messages';
 import { must, onUnique } from '@/lib/refuse';
 import { assignmentInclude, clashSays, describeAssignment, findClash, linkExpiry } from '@/lib/staffing';
 import { drainOutbox } from '@/modules/notifications/outbox';
+import { plannerAction } from '@/lib/planner';
 
 // The planner's day-of moves (PRD 5): check someone in or out on a lead's behalf, close an alert, deploy float.
 const board = (ctx: OrgCtx, eventId: string, day?: string) => `/o/${ctx.slug}/events/${eventId}/board${day ? `?day=${day}` : ''}`;
 
-export const plannerCheck = orgAction(null, z.object({ id: ref('assignment'), action: z.enum(['in', 'out']), day: z.string().max(10).optional() }), async (ctx, i) => {
+export const plannerCheck = plannerAction(z.object({ id: ref('assignment'), action: z.enum(['in', 'out']), day: z.string().max(10).optional() }), async (ctx, i) => {
   const a = must(await db.assignment.findFirst({ where: { id: i.id, ...inOrg(ctx) }, include: assignmentInclude }));
   await db.$transaction((tx) => (i.action === 'in' ? checkIn(tx, a, now(), 'planner') : checkOut(tx, a, now(), 'planner')));
   redirect(board(ctx, a.eventId, i.day));
 });
 
-export const resolveAlert = orgAction(null, z.object({ id: ref('alert'), resolution: z.string().trim().max(200).default(''), day: z.string().max(10).optional() }), async (ctx, i) => {
+export const resolveAlert = plannerAction(z.object({ id: ref('alert'), resolution: z.string().trim().max(200).default(''), day: z.string().max(10).optional() }), async (ctx, i) => {
   const al = must(await db.alert.findFirst({ where: { id: i.id, ...inOrg(ctx) } }));
   await db.$transaction(async (tx) => {
     await tx.alert.update({ where: { id: al.id }, data: { resolvedAt: now(), resolution: i.resolution || 'resolved by planner' } });
@@ -33,7 +34,7 @@ export const resolveAlert = orgAction(null, z.object({ id: ref('alert'), resolut
 });
 
 /** Moves a checked-in float to a red shift and tells them where to go. Never automatic: the planner picks (PRD 5 rules). */
-export const deployFloat = orgAction(null, z.object({ id: ref('assignment'), shiftId: ref('shift'), day: z.string().max(10).optional() }), async (ctx, i) => {
+export const deployFloat = plannerAction(z.object({ id: ref('assignment'), shiftId: ref('shift'), day: z.string().max(10).optional() }), async (ctx, i) => {
   const a = must(await db.assignment.findFirst({ where: { id: i.id, ...inOrg(ctx) }, include: assignmentInclude }));
   const to = must(await db.shift.findFirst({ where: { id: i.shiftId, ...inOrg(ctx), eventId: a.eventId }, include: { position: true } }));
   if (!a.shift.position.isFloat) throw new Refused(`${a.person.name} is not in the float pool.`);
