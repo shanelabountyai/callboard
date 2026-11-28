@@ -1,14 +1,14 @@
 'use server';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { orgAction, ref } from '@/core/authz/action';
+import { ref } from '@/core/authz/action';
 import { db } from '@/core/db';
 import { resendToNonAckers, sendBroadcast } from '@/lib/broadcast';
 import { drainOutbox } from '@/modules/notifications/outbox';
+import { plannerAction } from '@/lib/planner';
 
 // Targeted sends (PRD 4). The audience string is validated inside resolveAudience against this org's rows.
-export const send = orgAction(
-  null,
+export const send = plannerAction(
   z.object({ eventId: ref('event'), audience: z.string().trim().min(1, 'Pick who this goes to.').max(60), body: z.string().trim().min(1, 'Write the message.').max(2000), requiresAck: z.string().optional() }),
   async (ctx, i) => {
     const n = await sendBroadcast(ctx, i.eventId, i.audience, i.body, i.requiresAck === 'on');
@@ -17,7 +17,7 @@ export const send = orgAction(
   },
 );
 
-export const resend = orgAction(null, z.object({ id: ref('broadcast') }), async (ctx, i) => {
+export const resend = plannerAction(z.object({ id: ref('broadcast') }), async (ctx, i) => {
   const n = await resendToNonAckers(ctx, i.id);
   await drainOutbox(25);
   const b = await db.broadcast.findFirstOrThrow({ where: { id: i.id, orgId: ctx.orgId }, select: { eventId: true } });
