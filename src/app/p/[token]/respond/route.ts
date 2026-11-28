@@ -30,10 +30,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   // A yes after a no takes the shift back, and they may have been given another one since.
   const shift = answer === 'confirm' ? (await db.assignment.findFirst({ where: mine, select: { shift: true } }))?.shift : null;
   if (shift && (await findClash(db, link.orgId, [link.personId], shift, id.data))) return Response.redirect(new URL(`/p/${token}?done=clash`, req.url), 303);
+  // The lock is also in the write, so a check-in, shift end or no-show alert landing after the read above still holds.
+  const locked = answer === 'decline' ? { checkedInAt: null, shift: { endAt: { gt: t } }, alerts: { none: { kind: 'no_show' as const } } } : {};
   const { count } = await db.assignment.updateMany({
-    where: { ...mine, status: { in: ['invited', 'confirmed', 'declined'] } },
+    where: { ...mine, status: { in: ['invited', 'confirmed', 'declined'] }, ...locked },
     data: { status, respondedAt: t },
   });
+  if (!count && answer === 'decline' && (await db.assignment.count({ where: { ...mine, status: { in: ['invited', 'confirmed', 'declined'] } } }))) return Response.redirect(new URL(`/p/${token}?done=locked`, req.url), 303);
   if (count) await audit({ orgId: link.orgId, userId: null }, `assignment.${status}`, { targetType: 'assignment', targetId: id.data, data: { by: 'person', personId: link.personId } });
   return Response.redirect(new URL(`/p/${token}?done=${answer}`, req.url), 303);
 }
